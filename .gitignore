@@ -1,0 +1,90 @@
+HELP.md
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### Application Configuration Files (민감한 정보 포함) ###
+**/application.yml
+**/application-local.yml
+**/application-dev.yml
+**/application-secret.yml
+**/application-prod.yml
+*.local.yml
+*.local.yaml
+
+### Logs ###
+logs/
+*.log
+*.log.*
+
+### OS Files ###
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+*~
+
+### Environment Variables ###
+.env
+.env.local
+.env.*.local
+
+### Temporary Files ###
+*.tmp
+*.temp
+*.bak
+*.backup
+
+### QueryDSL ###
+/src/main/generated
+
+### Redis ###
+# Redis 백업 데이터 파일 (로컬 테스트 시 생성될 수 있음)
+*.rdb
+*.aof
+
+### Security / OAuth2.0 ###
+# OAuth2 클라이언트 비밀키나 설정이 별도 파일로 분리된 경우
+# (이미 **/application-*.yml로 방어 중이지만 명시적으로 추가)
+**/keys.jks
+**/truststore.jks
+*.p12
+*.pem
