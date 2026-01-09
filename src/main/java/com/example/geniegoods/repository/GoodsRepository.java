@@ -30,8 +30,10 @@ public interface GoodsRepository extends JpaRepository<GoodsEntity, Long> {
     @Query("SELECT g as goods, COUNT(v) as viewCount " +
     	       "FROM GoodsEntity g " +
     	       "LEFT JOIN GoodsViewEntity v ON v.goods = g " +
-    	       "WHERE (:categoryId IS NULL OR g.goodsCategoryEntity.categoryId = :categoryId) " +
+    	       "WHERE (:categoryId IS NULL OR g.goodsCategoryEntity.categoryId = :categoryId) AND g.isPublic = true " +
     	       "GROUP BY g " +
     	       "ORDER BY viewCount DESC")
     	Page<GoodsBrowseProjection> findByCategoryWithViews(@Param("categoryId") Long categoryId, Pageable pageable);
+
+    List<GoodsEntity> findByUserAndIsPublicOrderByCreatedAtDesc(UserEntity user, boolean b);
 }

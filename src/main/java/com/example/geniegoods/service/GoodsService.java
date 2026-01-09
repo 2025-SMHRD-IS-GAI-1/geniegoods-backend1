@@ -40,6 +40,11 @@ public class GoodsService {
     @Value("${app.object-storage.endpoint}")
     private String endpoint;  // URL 추출에 필요
 
+    /**
+     * 내가 생성한 굿즈 -> 삭제
+     * @param goodsIds
+     * @param currentUserId
+     */
     @Transactional
     public void deleteGoodsByIds(List<Long> goodsIds, Long currentUserId) {
         for (Long goodsId : goodsIds) {
@@ -51,30 +56,11 @@ public class GoodsService {
                 throw new IllegalStateException("본인의 굿즈만 삭제할 수 있습니다.");
             }
 
-            UploadImgGroupEntity imgGroup = goods.getUploadImgGroup();
-            if (imgGroup != null) {
-                List<UploadImgEntity> imgList = uploadImgRepository.findByUploadImgGroup(imgGroup);
+            // isPublic 만 false로 둠
+            goods.setIsPublic(false);
 
-                // 1. 실제 이미지 파일 삭제
-                for (UploadImgEntity img : imgList) {
-                    String imgUrl = img.getUploadImgUrl();
-                    if (imgUrl != null && !imgUrl.isEmpty()) {
-                        deleteImageFromStorage(imgUrl);
-                    }
-                }
+            goodsRepository.save(goods);
 
-                // 2. 자식 엔티티 삭제 (UploadImgEntity)
-                uploadImgRepository.deleteAll(imgList);
-
-                // 3. 부모 먼저 삭제 (GoodsEntity) ← 이게 핵심!
-                goodsRepository.delete(goods);
-
-                // 4. 자식 그룹 마지막에 삭제
-                uploadImgGroupRepository.delete(imgGroup);
-            } else {
-                // 그룹 없으면 Goods만 삭제
-                goodsRepository.delete(goods);
-            }
         }
     }
 
@@ -186,7 +172,7 @@ public class GoodsService {
      * @return
      */
     public List<SelectAllMyGoodsResponseDTO> selectAllMyGoods(UserEntity user) {
-        List<GoodsEntity> goodsEntityList = goodsRepository.findByUser(user);
+        List<GoodsEntity> goodsEntityList = goodsRepository.findByUserAndIsPublicOrderByCreatedAtDesc(user, true);
 
         List<SelectAllMyGoodsResponseDTO> response = new ArrayList<>();
 
