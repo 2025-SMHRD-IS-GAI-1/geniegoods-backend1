@@ -1,5 +1,9 @@
 package com.example.geniegoods.service;
 
+import com.example.geniegoods.dto.goods.YoloDetectionResponseDTO;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.*;
@@ -9,11 +13,8 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
-import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 @Slf4j
@@ -22,22 +23,30 @@ import java.util.List;
 public class YoloService {
 
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
 
-    private static final String YOLO_API_URL = "http://localhost:8000/api/yolo";
+    private static final String YOLO_API_URL = "http://localhost:8000/api/yolo/detect";
 
     /**
      * yolo api 호출 업로드 이미지를 객체만 딴 이미지로 변환
+     *
      * @param uploadImgFiles 업로드된 이미지 파일 배열
-     * @return FastAPI에서 생성된 객체 이미지 파일 배열
+     * @return FastAPI에서 생성된 객체 이미지 파일 리스트
      */
-    public MultipartFile[] createGoodsImage(MultipartFile[] uploadImgFiles) {
+    public List<byte[]> createObjectDetetctionImage(MultipartFile[] uploadImgFiles) {
+
+        List<byte[]> resultBytesList = new ArrayList<>();
+
         try {
+            if (uploadImgFiles == null || uploadImgFiles.length == 0) {
+                throw new IllegalArgumentException("업로드할 이미지 파일이 없습니다.");
+            }
+
             // 1. MultipartFile을 FastAPI가 받을 수 있는 형태로 변환
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-            
+
             // 각 파일을 Resource로 변환하여 추가
-            for (int i = 0; i < uploadImgFiles.length; i++) {
-                MultipartFile file = uploadImgFiles[i];
+            for (MultipartFile file : uploadImgFiles) {
                 if (file != null && !file.isEmpty()) {
                     Resource resource = new ByteArrayResource(file.getBytes()) {
                         @Override
@@ -45,7 +54,7 @@ public class YoloService {
                             return file.getOriginalFilename();
                         }
                     };
-                    body.add("files", resource); // FastAPI에서 받는 파라미터명에 맞게 수정
+                    body.add("files", resource);
                 }
             }
 
@@ -56,79 +65,46 @@ public class YoloService {
             // 3. HTTP 요청 엔티티 생성
             HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
 
-            // 4. FastAPI 호출
+            // 4. FastAPI 호출 - JSON 응답 받기
             log.info("YOLO API 호출 시작: {}", YOLO_API_URL);
-            ResponseEntity<byte[][]> response = restTemplate.exchange(
+            ResponseEntity<String> response = restTemplate.exchange(
                     YOLO_API_URL,
                     HttpMethod.POST,
                     requestEntity,
-                    byte[][].class
+                    String.class
             );
 
-            // 5. 응답을 MultipartFile 배열로 변환
+            // 5. JSON 응답 파싱
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                byte[][] responseFiles = response.getBody();
-                List<MultipartFile> resultFiles = new ArrayList<>();
-                
-                for (int i = 0; i < responseFiles.length; i++) {
-                    byte[] fileBytes = responseFiles[i];
-                    final int index = i;
-                    
-                    MultipartFile multipartFile = new MultipartFile() {
-                        @Override
-                        public String getName() {
-                            return "object_image_" + index;
+                YoloDetectionResponseDTO detectionResponse = objectMapper.readValue(
+                        response.getBody(),
+                        YoloDetectionResponseDTO.class
+                );
+
+                log.info("YOLO API 응답: 총 탐지={}, 저장된 탐지={}, 크롭 개수={}",
+                        detectionResponse.getTotal_detections(),
+                        detectionResponse.getKept_detections(),
+                        detectionResponse.getCrops() != null ? detectionResponse.getCrops().size() : 0);
+                // 6. base64 디코딩하여 byte[] 리스트로 반환
+
+                if (detectionResponse.getCrops() != null) {
+                    for (YoloDetectionResponseDTO.CropInfoDTO crop : detectionResponse.getCrops()) {
+                        String cropData = crop.getCrop_data();
+                        if (cropData == null || cropData.isEmpty()) {
+                            continue;
                         }
 
-                        @Override
-                        public String getOriginalFilename() {
-                            return "object_image_" + index + ".png";
-                        }
-
-                        @Override
-                        public String getContentType() {
-                            return "image/png";
-                        }
-
-                        @Override
-                        public boolean isEmpty() {
-                            return fileBytes == null || fileBytes.length == 0;
-                        }
-
-                        @Override
-                        public long getSize() {
-                            return fileBytes != null ? fileBytes.length : 0;
-                        }
-
-                        @Override
-                        public byte[] getBytes() throws IOException {
-                            return fileBytes;
-                        }
-
-                        @Override
-                        public java.io.InputStream getInputStream() throws IOException {
-                            return new java.io.ByteArrayInputStream(fileBytes);
-                        }
-
-                        @Override
-                        public void transferTo(java.io.File dest) throws IOException, IllegalStateException {
-                            throw new UnsupportedOperationException("Not implemented");
-                        }
-                    };
-                    
-                    resultFiles.add(multipartFile);
+                        byte[] imageBytes = Base64.getDecoder().decode(cropData);
+                        resultBytesList.add(imageBytes);
+                    }
                 }
-                
-                log.info("YOLO API 호출 성공: {}개 파일 반환", resultFiles.size());
-                return resultFiles.toArray(new MultipartFile[0]);
-            } else {
-                log.error("YOLO API 호출 실패: 상태 코드 {}", response.getStatusCode());
-                throw new RuntimeException("YOLO API 호출 실패: " + response.getStatusCode());
-            }
 
+                return resultBytesList;
+            }
         } catch (Exception e) {
             log.error("YOLO API 호출 중 오류 발생", e);
             throw new RuntimeException("YOLO API 호출 중 오류: " + e.getMessage(), e);
         }
+        return resultBytesList;
     }
 }
