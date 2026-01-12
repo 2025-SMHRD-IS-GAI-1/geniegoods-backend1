@@ -134,12 +134,12 @@ public class GoodsRestController {
         uploadImgService.uploadImgSave(user, dto, uploadImgUrlList, uploadImgGroup);
 
         // yolo api 호출 -> 객체 이미지 생성
-        //MultipartFile[] objectImgFiles = yoloService.createGoodsImage(dto.getUploadImages());
+        List<byte[]> objectImgBytesList = yoloService.createObjectDetetctionImage(dto.getUploadImages());
 
         // 나노바나나 api 호출 -> 굿즈 이미지 생성
-        //MultipartFile goodsImgFile = nanoService.createGoodsImage(objectImgFiles, dto);
+        MultipartFile goodsImgFile = nanoService.createGoodsImage(objectImgBytesList, dto);
 
-        // 굿즈 이미지 파일 Object Storage 저장 (임시로 첫번째 이미지 url 저장)
+        // 굿즈 이미지 파일 Object Storage 저장
         String goodsImgUrl = "";
 
         // 굿즈 이미지 이미 Object Storage에 저장되어있으면 삭제
@@ -148,7 +148,7 @@ public class GoodsRestController {
         }
 
         try {
-            goodsImgUrl = objectStorageService.uploadFile(dto.getUploadImages()[0], user.getUserId(), "temp" + "/" + user.getUserId() + "/" + uploadImgGroup.getUploadGroupId());
+            goodsImgUrl = objectStorageService.uploadFile(goodsImgFile, user.getUserId(), "temp" + "/" + user.getUserId() + "/" + uploadImgGroup.getUploadGroupId());
         } catch (IOException e) {
             responseDTO.setStatus("ERROR");
             responseDTO.setMessage("굿즈 이미지 Object Storage 저장 실패");
@@ -170,7 +170,7 @@ public class GoodsRestController {
      * 굿즈 시안 3개 이미지 생성
      * @param user 생성한 사용자
      * @param dto 굿즈 옵션 값
-     * @return 프론트에 나노바나나로 생성한 이미지 url 지금은 임시방편으로 String 값 반환
+     * @return 프론트에 나노바나나로 생성한 이미지 url
      */
     @PostMapping("/create-goods-sample")
     public ResponseEntity<CreateGoodsSampleResponseDTO> createGoodsSample(
