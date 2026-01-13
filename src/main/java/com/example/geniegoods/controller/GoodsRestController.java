@@ -6,6 +6,8 @@ import com.example.geniegoods.entity.UploadImgEntity;
 import com.example.geniegoods.entity.UploadImgGroupEntity;
 import com.example.geniegoods.entity.UserEntity;
 import com.example.geniegoods.service.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -24,6 +26,7 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+@Tag(name = "Goods API", description = "굿즈 관련 API")
 @Slf4j
 @RestController
 @RequestMapping("/api/goods")
@@ -42,9 +45,7 @@ public class GoodsRestController {
 
     private final NanoService nanoService;
 
-    /**
-     * 선택된 굿즈 일괄 삭제 (이미지 포함)
-     */
+    @Operation(summary = "굿즈 일괄 삭제", description = "선택된 굿즈 일괄 삭제")
     @DeleteMapping("/bulk")
     public ResponseEntity<Map<String, String>> deleteGoodsBulk(
             @AuthenticationPrincipal UserEntity currentUser,
@@ -73,12 +74,7 @@ public class GoodsRestController {
     }
     
 
-    /**
-     * 굿즈 이미지 생성
-     * @param user 생성한 사용자
-     * @param dto 굿즈 옵션 값
-     * @return 프론트에 나노바나나로 생성한 이미지 url 지금은 임시방편으로 String 값 반환
-     */
+    @Operation(summary = "굿즈 이미지 생성", description = "굿즈 이미지 생성 및 Object Storage 에 저장")
     @PostMapping("/create-image")
     public ResponseEntity<CreateGoodsImgResponseDTO> createGoodsImage(
             @AuthenticationPrincipal UserEntity user,
@@ -160,12 +156,7 @@ public class GoodsRestController {
         return ResponseEntity.ok(responseDTO);
     }
 
-    /**
-     * 굿즈 시안 3개 이미지 생성
-     * @param user 생성한 사용자
-     * @param dto 굿즈 옵션 값
-     * @return 프론트에 나노바나나로 생성한 이미지 url
-     */
+    @Operation(summary = "굿즈 시안 생성", description = "나노바나나 api 통해서 굿즈 시안 이미지 기존 포함 3개 생성")
     @PostMapping("/create-goods-sample")
     public ResponseEntity<CreateGoodsSampleResponseDTO> createGoodsSample(
             @AuthenticationPrincipal UserEntity user,
@@ -233,12 +224,7 @@ public class GoodsRestController {
         return ResponseEntity.ok(responseDTO);
     }
 
-    /**
-     * 뒤로가기시 ObjectStorage에 있는 sample 폴더 삭제하기
-     * @param user
-     * @param dto
-     * @return
-     */
+    @Operation(summary = "굿즈 선택에서 뒤로가기", description = "뒤로가기시 ObjectStorage에 있는 sample 폴더 이미지 삭제")
     @PostMapping("/delete-goods-sample")
     public ResponseEntity<DeleteGoodsSampleResponseDTO> deleteSampleImg(
             @AuthenticationPrincipal UserEntity user,
@@ -252,12 +238,7 @@ public class GoodsRestController {
         return ResponseEntity.ok(response);
     }
 
-
-    /**
-     * 시안 이미지 다운로드 (CORS 문제 해결을 위한 프록시)
-     * @param imageUrl 다운로드할 이미지 URL (쿼리 파라미터)
-     * @return 이미지 바이트 배열
-     */
+    @Operation(summary = "시안 이미지 다운로드", description = "시안 이미지 다운로드")
     @GetMapping("/download-image")
     public ResponseEntity<byte[]> downloadImage(
             @RequestParam("url") String imageUrl
@@ -289,11 +270,7 @@ public class GoodsRestController {
         }
     }
 
-    /**
-     * 여러 이미지를 ZIP 파일로 다운로드
-     * @param imageUrls 다운로드할 이미지 URL 리스트 (쿼리 파라미터)
-     * @return ZIP 파일 바이트 배열
-     */
+    @Operation(summary = "여러 이미지 다운로드", description = "여러 이미지를 ZIP 파일로 다운로드")
     @GetMapping("/download-images-zip")
     public ResponseEntity<byte[]> downloadImagesAsZip(
             @RequestParam("urls") List<String> imageUrls
@@ -352,12 +329,7 @@ public class GoodsRestController {
         }
     }
 
-    /**
-     * 시안 선택
-     * @param user
-     * @param dto
-     * @return
-     */
+    @Operation(summary = "시안 선택", description = "시안 선택화면에서 시안 선택시 굿즈 테이블에 insert")
     @PostMapping("/select-goods")
     public ResponseEntity<SelectGoodsResponseDTO> selectGoods(
             @AuthenticationPrincipal UserEntity user,
@@ -401,9 +373,7 @@ public class GoodsRestController {
         return ResponseEntity.ok(goodsService.selectGoods(user, dto, goodsImgUrl, goodsImgFile));
     }
 
-    /**
-     * 내가 생성한 굿즈 리스트 불러오기
-     */
+    @Operation(summary = "내가 생성한 굿즈 리스트", description = "내가 생성한 굿즈 리스트 불러오기")
     @GetMapping("/select-all-my-goods")
     public ResponseEntity<List<SelectAllMyGoodsResponseDTO>> selectAllMyGoods(
             @AuthenticationPrincipal UserEntity user
@@ -449,13 +419,8 @@ public class GoodsRestController {
         };
     }
 
-    /**
-     * 굿즈 둘러보기
-     * @param categoryId
-     * @param page
-     * @param size
-     * @return
-     */
+    @Operation(summary = "굿즈 둘러보기", description = "굿즈 둘러보기 (비회원도 가능)")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirements
     @GetMapping("/browse")
     public List<GoodsBrowseDTO> browseGoods(
             @RequestParam(name = "categoryId", required = false) Long categoryId,
@@ -471,10 +436,9 @@ public class GoodsRestController {
         return goodsService.browseGoods(categoryId, pageable);
     }
 
-    /**
-     * 굿즈 상세 조회 (조회수 1증가)
-     */
+    @Operation(summary = "굿즈 상세보기", description = "굿즈 상세보기 (비회원도 가능) 비회원인 경우 조회수 카운트 안셈")
     @PostMapping("/view-goods")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirements
     public ResponseEntity<GoodsDetailDTO> viewGoods(
             @RequestBody GoodsDetailRequestDTO dto,
             @AuthenticationPrincipal UserEntity user) {
