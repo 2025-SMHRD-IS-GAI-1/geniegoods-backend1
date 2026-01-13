@@ -2,7 +2,10 @@ package com.example.geniegoods.service;
 
 import com.example.geniegoods.dto.goods.CreateGoodsImgRequestDTO;
 import com.example.geniegoods.dto.goods.NanobananaComposeResponseDTO;
+import com.example.geniegoods.dto.goods.NanoBananaSampleResponseDTO;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.*;
@@ -12,12 +15,10 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
 import java.io.IOException;
-import java.util.List;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -27,7 +28,8 @@ public class NanoService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    private static final String NANO_API_URL = "http://localhost:8001/api/nano/compose";
+    private static final String NANO_COMPOSE_API_URL = "http://localhost:8001/api/nano/compose";
+    private static final String NANO_API_URL = "http://localhost:8001/api/nano/sample";
 
     /**
      * nano api 호출 - 객체 이미지와 옵션을 받아서 굿즈 이미지 생성
@@ -72,12 +74,12 @@ public class NanoService {
             HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
 
             // 5. FastAPI 호출 - JSON 응답 받기
-            log.info("Nano API 호출 시작: {}", NANO_API_URL);
+            log.info("Nano API 호출 시작: {}", NANO_COMPOSE_API_URL);
             log.info("전송 옵션 - style: {}, color: {}, mood: {}, category: {}, description: {}", 
                     dto.getStyle(), dto.getColor(), dto.getMood(), dto.getCategory(), dto.getDescription());
             
             ResponseEntity<String> response = restTemplate.exchange(
-                    NANO_API_URL,
+                    NANO_COMPOSE_API_URL,
                     HttpMethod.POST,
                     requestEntity,
                     String.class
@@ -168,7 +170,7 @@ public class NanoService {
      * @param resultGoodsImageFileByte 굿즈 이미지 파일 바이트 배열
      * @return 굿즈 시안 이미지 3개 파일
      */
-    public MultipartFile[] createGoodsSampleImage(byte[] resultGoodsImageFileByte) {
+    public List<MultipartFile> createGoodsSampleImage(byte[] resultGoodsImageFileByte) {
         try {
             // 1. MultipartFile과 옵션을 FastAPI가 받을 수 있는 형태로 변환
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
@@ -194,45 +196,61 @@ public class NanoService {
             );
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                byte[] imageBytes = response.getBody();
-                MultipartFile[] sampleGoodsImages = new MultipartFile[3];
-                for (int i = 0; i < 3; i++) {
-                    int finalI = i;
-                    sampleGoodsImages[i] = new MultipartFile() {
-                        @Override
-                        public String getName() {
-                            return "sample-image-" + finalI;
-                        }
-                        @Override
-                        public String getOriginalFilename() {
-                            return "sample-image-" + finalI + ".jpg";
-                        }
-                        @Override
-                        public String getContentType() {
-                            return "image/jpeg";
-                        }
-                        @Override
-                        public boolean isEmpty() {
-                            return imageBytes == null || imageBytes.length == 0;
-                        }
-                        @Override
-                        public long getSize() {
-                            return imageBytes != null ? imageBytes.length : 0;
-                        }
-                        @Override
-                        public byte[] getBytes() throws IOException {
-                            return imageBytes;
-                        }
-                        @Override
-                        public java.io.InputStream getInputStream() throws IOException {
-                            return new java.io.ByteArrayInputStream(imageBytes);
-                        }
-                        @Override
-                        public void transferTo(java.io.File dest) throws IOException, IllegalStateException {
-                            throw new UnsupportedOperationException("Not implemented");
-                        }
-                    };
+
+                // JSON 파싱
+                NanoBananaSampleResponseDTO sampleResponse = objectMapper.readValue(
+                    response.getBody(),
+                    NanoBananaSampleResponseDTO.class
+                );
+
+                List<MultipartFile> sampleGoodsImages = new ArrayList<>();
+
+                // reuslt_data_list의 각 base64 문자열을 디코딩
+                if(sampleResponse.getResult_data_list() != null) {
+                    for (int i = 0; i < sampleResponse.getResult_data_list().size(); i++) {
+                        String base64Data = sampleResponse.getResult_data_list().get(i);
+                        byte[] imageBytes = Base64.getDecoder().decode(base64Data);
+
+                        int finalI = i;
+
+                        MultipartFile sampleGoodsImage = new MultipartFile() {
+                            @Override
+                            public String getName() {
+                                return "sample-image-" + finalI;
+                            }
+                            @Override
+                            public String getOriginalFilename() {
+                                return "sample-image-" + finalI + ".jpg";
+                            }
+                            @Override
+                            public String getContentType() {
+                                return "image/jpeg";
+                            }
+                            @Override
+                            public boolean isEmpty() {
+                                return imageBytes == null || imageBytes.length == 0;
+                            }
+                            @Override
+                            public long getSize() {
+                                return imageBytes != null ? imageBytes.length : 0;
+                            }
+                            @Override
+                            public byte[] getBytes() throws IOException {
+                                return imageBytes;
+                            }
+                            @Override
+                            public java.io.InputStream getInputStream() throws IOException {
+                                return new java.io.ByteArrayInputStream(imageBytes);
+                            }
+                            @Override
+                            public void transferTo(java.io.File dest) throws IOException, IllegalStateException {
+                                throw new UnsupportedOperationException("Not implemented");
+                            }
+                        };
+                        sampleGoodsImages.add(sampleGoodsImage);
+                    }
                 }
+
                 return sampleGoodsImages;
             } else {
                 log.error("Nano API 호출 실패: 상태 코드 {}", response.getStatusCode());
