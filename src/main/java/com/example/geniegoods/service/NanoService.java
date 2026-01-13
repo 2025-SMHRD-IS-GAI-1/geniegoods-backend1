@@ -45,6 +45,7 @@ public class NanoService {
 
             // 1. 프롬프트 생성 (DTO의 옵션들을 조합)
             String prompt = dto.getDescription();
+            String category = dto.getCategory();
             log.info("생성된 프롬프트: {}", prompt);
 
             // 2. byte 배열과 프롬프트를 FastAPI가 받을 수 있는 형태로 변환
@@ -65,6 +66,7 @@ public class NanoService {
 
             // 프롬프트 추가
             body.add("prompt", prompt);
+            body.add("category", category);
 
             // 3. HTTP 헤더 설정
             HttpHeaders headers = new HttpHeaders();
@@ -170,7 +172,7 @@ public class NanoService {
      * @param resultGoodsImageFileByte 굿즈 이미지 파일 바이트 배열
      * @return 굿즈 시안 이미지 3개 파일
      */
-    public List<MultipartFile> createGoodsSampleImage(byte[] resultGoodsImageFileByte) {
+    public List<MultipartFile> createGoodsSampleImage(byte[] resultGoodsImageFileByte, String category) {
         try {
             // 1. MultipartFile과 옵션을 FastAPI가 받을 수 있는 형태로 변환
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
@@ -182,6 +184,7 @@ public class NanoService {
                 }
             };
             body.add("result_image", resource);
+            body.add("category", category);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);
