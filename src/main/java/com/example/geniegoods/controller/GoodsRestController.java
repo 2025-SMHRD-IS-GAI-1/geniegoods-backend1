@@ -5,8 +5,6 @@ import com.example.geniegoods.dto.goods.*;
 import com.example.geniegoods.entity.UploadImgEntity;
 import com.example.geniegoods.entity.UploadImgGroupEntity;
 import com.example.geniegoods.entity.UserEntity;
-import com.example.geniegoods.repository.GoodsRepository;
-import com.example.geniegoods.repository.GoodsViewRepository;
 import com.example.geniegoods.service.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,10 +41,6 @@ public class GoodsRestController {
     private final YoloService yoloService;
 
     private final NanoService nanoService;
-    
-    private final GoodsRepository goodsRepository;
-    
-    private final GoodsViewRepository goodsViewRepository;
 
     /**
      * 선택된 굿즈 일괄 삭제 (이미지 포함)
@@ -191,22 +185,34 @@ public class GoodsRestController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(responseDTO);
         }
 
-        // byte[] -> MutilpartFile 로 변환 (임시용으로 나중에 나노바나나 API로 대체)
+        // byte[] -> MutilpartFile 로 변환
         MultipartFile resultGoodsImageFile = byteArrayToMultipartFile(resultGoodsImageFileByte);
 
-        // (나노바나나 API로 대체)
-        // MultipartFile[] sampleGoodsImages = nanoService.createGoodsSampleImage(resultGoodsImageFileByte);
+        // 나노바나나를 통해 2개의 시안 이미지 생성
+        List<MultipartFile> sampleGoodsImages = nanoService.createGoodsSampleImage(resultGoodsImageFileByte);
+
         List<String> sampleImgUrls = new ArrayList<>();
         
         if (resultGoodsImageFileByte != null && resultGoodsImageFileByte.length > 0) {
             // 폴더 경로 생성
             String folderPath = "sample" + "/" + user.getUserId() + "/" + dto.getUploadImgGroupId();
 
-            for (int i = 0; i < 3; i++) {
-                
-                String url;
+            try {
+                String sampleImgUrl = objectStorageService.uploadFile(resultGoodsImageFile, user.getUserId(), folderPath);
+                sampleImgUrls.add(sampleImgUrl);
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+                responseDTO.setStatus("ERROR");
+                responseDTO.setMessage("시안 생성 실패: " + e.getMessage());
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(responseDTO);
+            }
+
+            for(int i = 0; i < sampleGoodsImages.size(); i++) {
+                MultipartFile multipartFile = sampleGoodsImages.get(i);
                 try {
-                    url = objectStorageService.uploadFile(resultGoodsImageFile, user.getUserId(), folderPath);
+                    String sampleImgUrl = objectStorageService.uploadFile(multipartFile, user.getUserId(), folderPath);
+                    sampleImgUrls.add(sampleImgUrl);
                 } catch (IOException e) {
                     // TODO Auto-generated catch block
                     e.printStackTrace();
@@ -214,8 +220,8 @@ public class GoodsRestController {
                     responseDTO.setMessage("시안 생성 실패: " + e.getMessage());
                     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(responseDTO);
                 }
-                sampleImgUrls.add(url);
             }
+
             responseDTO.setStatus("SUCCESS");
             responseDTO.setMessage("시안 생성 완료");
             responseDTO.setGoodsSampleImgUrls(sampleImgUrls);
