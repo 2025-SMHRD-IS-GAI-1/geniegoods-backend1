@@ -18,12 +18,15 @@ public class JwtUtil {
 
 	private final SecretKey secretKey;
 	private final long accessTokenExpiration;
+	private final long refreshTokenExpiration;
 
 	public JwtUtil(
 			@Value("${app.auth.token-secret}") String tokenSecret,
-			@Value("${app.auth.access-token-expiration-msec}") long accessTokenExpiration) {
+			@Value("${app.auth.access-token-expiration-msec}") long accessTokenExpiration,
+			@Value("${app.auth.refresh-token-expiration-msec}") long refreshTokenExpiration) {
 		this.secretKey = Keys.hmacShaKeyFor(tokenSecret.getBytes(StandardCharsets.UTF_8));
 		this.accessTokenExpiration = accessTokenExpiration;
+		this.refreshTokenExpiration = refreshTokenExpiration;
 	}
 
 	/**
@@ -39,6 +42,25 @@ public class JwtUtil {
 		return Jwts.builder()
 				.subject(String.valueOf(userId))
 				.claim("nickname", nickname)
+				.claim("type", "access")
+				.issuedAt(now)
+				.expiration(expiryDate)
+				.signWith(secretKey)
+				.compact();
+	}
+
+	/**
+	 * JWT Refresh Token 생성
+	 * @param userId 사용자 ID
+	 * @return JWT refresh 토큰 문자열
+	 */
+	public String generateRefreshToken(Long userId) {
+		Date now = new Date();
+		Date expiryDate = new Date(now.getTime() + refreshTokenExpiration);
+
+		return Jwts.builder()
+				.subject(String.valueOf(userId))
+				.claim("type", "refresh")
 				.issuedAt(now)
 				.expiration(expiryDate)
 				.signWith(secretKey)

@@ -2,8 +2,13 @@ package com.example.geniegoods.controller;
 
 import com.example.geniegoods.dto.user.*;
 import com.example.geniegoods.entity.UserEntity;
+import com.example.geniegoods.repository.UserRepository;
+import com.example.geniegoods.security.JwtUtil;
 import com.example.geniegoods.service.ObjectStorageService;
 import com.example.geniegoods.service.UserService;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -21,8 +26,9 @@ import java.util.Map;
 public class UserRestController {
 
     private final UserService userService;
-
     private final ObjectStorageService objectStorageService;
+    private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
     /**
      * 현재 로그인한 사용자 정보 조회
@@ -30,6 +36,82 @@ public class UserRestController {
     @GetMapping("/me")
     public ResponseEntity<UserEntity> getCurrentUser(@AuthenticationPrincipal UserEntity user) {
         return ResponseEntity.ok(user);
+    }
+
+    /**
+     * 로그아웃
+     * httpOnly 쿠키 삭제 (accessToken, refreshToken 모두)
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Map<String, String>> logout(HttpServletResponse response) {
+        // AccessToken 쿠키 삭제
+        Cookie accessTokenCookie = new Cookie("accessToken", null);
+        accessTokenCookie.setHttpOnly(true);
+        accessTokenCookie.setSecure(false);
+        accessTokenCookie.setPath("/");
+        accessTokenCookie.setMaxAge(0); // 즉시 삭제
+        accessTokenCookie.setAttribute("SameSite", "Lax"); // SameSite 속성도 설정
+        response.addCookie(accessTokenCookie);
+        
+        // RefreshToken 쿠키 삭제
+        Cookie refreshTokenCookie = new Cookie("refreshToken", null);
+        refreshTokenCookie.setHttpOnly(true);
+        refreshTokenCookie.setSecure(false);
+        refreshTokenCookie.setPath("/");
+        refreshTokenCookie.setMaxAge(0); // 즉시 삭제
+        refreshTokenCookie.setAttribute("SameSite", "Lax"); // SameSite 속성도 설정
+        response.addCookie(refreshTokenCookie);
+        
+        return ResponseEntity.ok(Map.of("message", "로그아웃되었습니다."));
+    }
+
+    /**
+     * RefreshToken으로 AccessToken 재발급
+     */
+    @PostMapping("/refresh")
+    public ResponseEntity<Map<String, String>> refreshToken(
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        
+        try {
+            // 쿠키에서 refreshToken 추출
+            Cookie[] cookies = request.getCookies();
+            String refreshToken = null;
+            if (cookies != null) {
+                for (Cookie cookie : cookies) {
+                    if ("refreshToken".equals(cookie.getName())) {
+                        refreshToken = cookie.getValue();
+                        break;
+                    }
+                }
+            }
+            
+            if (refreshToken == null || !jwtUtil.validateToken(refreshToken)) {
+                return ResponseEntity.status(401).body(Map.of("error", "Invalid refresh token"));
+            }
+            
+            // refreshToken에서 userId 추출
+            Long userId = jwtUtil.getUserIdFromToken(refreshToken);
+            UserEntity user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+            
+            // 새로운 accessToken 생성
+            String newAccessToken = jwtUtil.generateAccessToken(user.getUserId(), user.getNickname());
+            
+            // 새로운 accessToken 쿠키 설정
+            Cookie accessTokenCookie = new Cookie("accessToken", newAccessToken);
+            accessTokenCookie.setHttpOnly(true);
+            accessTokenCookie.setSecure(false);
+            accessTokenCookie.setPath("/");
+            accessTokenCookie.setMaxAge(30 * 60); // 30분
+            accessTokenCookie.setAttribute("SameSite", "Lax");
+            response.addCookie(accessTokenCookie);
+            
+            return ResponseEntity.ok(Map.of("message", "Token refreshed"));
+        } catch (Exception e) {
+            log.error("토큰 갱신 실패", e);
+            return ResponseEntity.status(401).body(Map.of("error", "Token refresh failed"));
+        }
     }
 
     /**

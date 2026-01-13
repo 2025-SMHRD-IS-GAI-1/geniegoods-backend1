@@ -34,8 +34,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**", "/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/user/token/**").permitAll() // 토큰 발급은 허용
+                        .requestMatchers("/api/user/refresh").permitAll() // 토큰 갱신은 허용
+                        .requestMatchers("/api/goods/browse", "/api/goods/view-goods").permitAll()
                         .requestMatchers("/api/user/me").authenticated() // 현재 사용자 정보는 인증 필요
                         .requestMatchers("/api/goods/**").authenticated() // 인증 필요
+                        .requestMatchers("/api/order/**").authenticated() // 인증 필요
                         .anyRequest().permitAll()
                 )
                 .oauth2Login(oauth2 -> oauth2

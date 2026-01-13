@@ -473,8 +473,7 @@ public class GoodsRestController {
             @RequestBody GoodsDetailRequestDTO dto,
             @AuthenticationPrincipal UserEntity user) {
 
-        goodsService.viewGoods(dto.getGoodsId(), user);
-        GoodsDetailDTO response = GoodsDetailDTO.builder().status("SUCCESS").message("굿즈 상세 조회 완료").build();
+        GoodsDetailDTO response = goodsService.viewGoods(dto.getGoodsId(), user);
 
         return ResponseEntity.ok(response);
     }
