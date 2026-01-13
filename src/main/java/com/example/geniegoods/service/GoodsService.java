@@ -188,14 +188,7 @@ public class GoodsService {
         return page.getContent().stream().map(proj -> GoodsBrowseDTO.builder()
                 .goodsId(proj.getGoods().getGoodsId())
                 .goodsUrl(proj.getGoods().getGoodsUrl())
-                .categoryKoreanName(proj.getGoods().getGoodsCategoryEntity().getKoreanName())
                 .viewCount(proj.getViewCount())
-                .creatorNickname(proj.getGoods().getUser().getNickname())
-                .createdAt(proj.getGoods().getCreatedAt())
-                .goodsStyle(proj.getGoods().getGoodsStyle() != null ? proj.getGoods().getGoodsStyle().getKoreanName() : null)
-                .goodsTone(proj.getGoods().getGoodsTone() != null ? proj.getGoods().getGoodsTone().getKoreanName() : null)
-                .goodsMood(proj.getGoods().getGoodsMood() != null ? proj.getGoods().getGoodsMood().getKoreanName() : null)
-                .prompt(proj.getGoods().getPrompt())
                 .build()).collect(Collectors.toList());
     }
     
@@ -204,7 +197,7 @@ public class GoodsService {
      * @param goodsId
      * @param user
      */
-    public void viewGoods(Long goodsId, UserEntity user) {
+    public GoodsDetailDTO viewGoods(Long goodsId, UserEntity user) {
         GoodsEntity goods = goodsRepository.findById(goodsId)
                 .orElseThrow(() -> new IllegalArgumentException("Goods not found"));
 
@@ -224,5 +217,9 @@ public class GoodsService {
                 goodsViewRepository.save(newView);
             }
         }
+
+        GoodsDetailDTO response = GoodsDetailDTO.of(goods);
+
+        return response;
     }
 }
