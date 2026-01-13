@@ -189,7 +189,7 @@ public class GoodsRestController {
         MultipartFile resultGoodsImageFile = byteArrayToMultipartFile(resultGoodsImageFileByte);
 
         // 나노바나나를 통해 2개의 시안 이미지 생성
-        List<MultipartFile> sampleGoodsImages = nanoService.createGoodsSampleImage(resultGoodsImageFileByte);
+        List<MultipartFile> sampleGoodsImages = nanoService.createGoodsSampleImage(resultGoodsImageFileByte, dto.getCategory());
 
         List<String> sampleImgUrls = new ArrayList<>();
         
