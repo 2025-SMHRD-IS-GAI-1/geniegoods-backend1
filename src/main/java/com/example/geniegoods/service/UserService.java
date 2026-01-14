@@ -1,5 +1,9 @@
 package com.example.geniegoods.service;
 
+import com.example.geniegoods.dto.user.NickCheckResponseDTO;
+import com.example.geniegoods.dto.user.NickUpdateResponseDTO;
+import com.example.geniegoods.dto.user.ProfileImgResponseDTO;
+import com.example.geniegoods.dto.user.WithDrawResponseDTO;
 import com.example.geniegoods.entity.UserEntity;
 import com.example.geniegoods.repository.GoodsRepository;
 import com.example.geniegoods.repository.UserRepository;
@@ -7,7 +11,9 @@ import com.example.geniegoods.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -19,6 +25,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final GoodsRepository goodsRepository;  // 굿즈 비공개 처리용
+    private final ObjectStorageService objectStorageService;
     private final JwtUtil jwtUtil;
 
     private static final int REJOIN_BLOCK_DAYS = 30;  // 재가입 제한 기간
@@ -35,26 +42,128 @@ public class UserService {
 
     // 프로필 이미지 업데이트
     @Transactional
-    public UserEntity updateProfileImage(UserEntity user, String imageUrl) {
-        user.setProfileUrl(imageUrl);
-        user.setUpdatedAt(LocalDateTime.now());
-        return userRepository.save(user);
+    public ProfileImgResponseDTO updateProfileImage(UserEntity user, MultipartFile file) {
+
+        try {
+            ProfileImgResponseDTO response = new ProfileImgResponseDTO();
+            // 파일 유효성 검사
+            if (file.isEmpty()) {
+                response.setStatus("ERROR");
+                response.setMessage("파일이 비어있습니다.");
+                return response;
+            }
+
+            // 이미지 파일인지 확인
+            String contentType = file.getContentType();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                response.setStatus("ERROR");
+                response.setMessage("이미지 파일만 업로드 가능합니다.");
+                return response;
+            }
+
+            // 파일 크기 제한 (10MB)
+            if (file.getSize() > 10 * 1024 * 1024) {
+                response.setStatus("ERROR");
+                response.setMessage("파일 크기는 10MB를 초과할 수 없습니다.");
+                return response;
+            }
+
+            // 기존 프로필 이미지가 있으면 삭제
+            if (user.getProfileUrl() != null && !user.getProfileUrl().isEmpty()) {
+                objectStorageService.deleteImage(user.getProfileUrl());
+            }
+
+            // 새로운 프로필 이미지 업로드
+            String imageUrl = objectStorageService.uploadFile(file, user.getUserId(), "profile");
+
+            // 프로필 이미지 업데이트
+            user.setProfileUrl(imageUrl);
+            user.setUpdatedAt(LocalDateTime.now());
+
+            userRepository.save(user);
+
+            return ProfileImgResponseDTO.builder()
+                    .status("SUCCESS")
+                    .message("프로필 이미지가 업로드되었습니다.")
+                    .profileUrl(user.getProfileUrl())
+                    .build();
+        } catch (IOException e) {
+            return ProfileImgResponseDTO.builder()
+                    .status("ERROR")
+                    .message("파일 업로드 중 오류가 발생했습니다: \" + e.getMessage()")
+                    .build();
+        }
+
     }
 
     // 닉네임 중복 확인
-    public long isNicknameExists(String nickname) {
-        return userRepository.countByNickname(nickname);
+    public NickCheckResponseDTO isNicknameExists(UserEntity currentUser, String nickname) {
+
+        NickCheckResponseDTO response = new NickCheckResponseDTO();
+
+        // 현재 사용자의 닉네임과 같으면 사용 가능
+        if (currentUser != null && currentUser.getNickname().equals(nickname)) {
+            response.setAvailable(false);
+            response.setMessage("현재 사용 중인 닉네임입니다.");
+            return response;
+        }
+
+        // 닉네임 중복 확인
+        boolean available = true;
+        String message = "사용 가능한 닉네임입니다.";
+
+        long count = userRepository.countByNickname(nickname);
+
+        if (count > 0) {
+            available = false;
+            message = "이미 사용 중인 닉네임입니다.";
+        }
+
+        response.setAvailable(available);
+        response.setMessage(message);
+
+        return response;
     }
 
-    // 닉네임 업데이트 (컨트롤러에서 user.setNickname 후 호출)
+    // 닉네임 업데이트
     @Transactional
-    public void updateNickname(UserEntity user) {
-        userRepository.save(user);
+    public NickUpdateResponseDTO updateNickname(UserEntity currentUser, String newNickname) {
+
+        NickUpdateResponseDTO response = new NickUpdateResponseDTO();
+
+        // validation
+        // 프론트쪽에서 무슨 요청을 보낼지 모르니 모든 경우의 수를 막아야 함
+        // 현재 사용자의 닉네임과 같으면 변경 안해도됨
+        if (currentUser != null && currentUser.getNickname().equals(newNickname)) {
+            response.setStatus("SAME_AS_CURRENT");
+            response.setMessage("현재 사용 중인 닉네임입니다.");
+            return response;
+        }
+
+        // 닉네임 중복 확인
+        long count = userRepository.countByNickname(newNickname);
+
+        // 중복확인 했는데 있으면 변경 안해도됨
+        if(count > 0) {
+            response.setStatus("DUPLICATED");
+            response.setMessage("이미 사용 중인 닉네임입니다.");
+            return response;
+        } else { // 실제로 닉네임 변경
+            currentUser.setNickname(newNickname);
+        }
+
+        userRepository.save(currentUser);
+
+        return NickUpdateResponseDTO.builder()
+                .message("SUCCESS")
+                .message("닉네임을 " + newNickname + "으로 변경했습니다.")
+                .build();
     }
 
     // ===== 회원 탈퇴 메서드 (핵심!) =====
     @Transactional
-    public void withdrawUser(Long userId) {
+    public WithDrawResponseDTO withdrawUser(Long userId) {
+
         UserEntity user = findById(userId);
 
         if (user.isDeleted()) {
@@ -63,7 +172,6 @@ public class UserService {
 
         // 개인정보 마스킹 (복구 가능하도록 최소한으로)
         user.setNickname("탈퇴한 사용자");
-        user.setProfileUrl(null);
 
         // 탈퇴 상태 변경
         user.setDeleted(true);
@@ -73,6 +181,11 @@ public class UserService {
 
         // 사용자가 만든 굿즈 비공개 처리
         goodsRepository.updateIsPublicByUserId(userId, false);
+
+        return WithDrawResponseDTO.builder()
+                .status("SUCCESS")
+                .message("회원탈퇴가 완료되었습니다. 이용해 주셔서 감사합니다.")
+                .build();
     }
 
     // ===== 소셜 로그인 시 재가입 제한 체크 및 복구 로직 =====
@@ -128,8 +241,4 @@ public class UserService {
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
     }
 
-    public UserEntity findByNickname(String nickname) {
-        return userRepository.findByNickname(nickname)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
-    }
 }

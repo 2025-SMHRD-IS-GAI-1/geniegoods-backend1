@@ -8,19 +8,21 @@ import com.example.geniegoods.enums.GoodsTone;
 import com.example.geniegoods.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @Service
 @RequiredArgsConstructor
@@ -31,14 +33,10 @@ public class GoodsService {
     private final UploadImgRepository uploadImgRepository;
     private final UploadImgGroupRepository uploadImgGroupRepository;
     private final GoodsCategoryRepository goodsCategoryRepository;
-    private final S3Client s3Client;  // 그대로 유지 (S3Client는 주입받음)
     private final GoodsViewRepository goodsViewRepository;
-
-    @Value("${app.object-storage.bucket-name}")
-    private String bucketName;
-
-    @Value("${app.object-storage.endpoint}")
-    private String endpoint;  // URL 추출에 필요
+    private final YoloService yoloService;
+    private final NanoService nanoService;
+    private final ObjectStorageService objectStorageService;
 
     /**
      * 내가 생성한 굿즈 -> 삭제
@@ -47,61 +45,68 @@ public class GoodsService {
      */
     @Transactional
     public void deleteGoodsByIds(List<Long> goodsIds, Long currentUserId) {
+
+        if (goodsIds == null || goodsIds.isEmpty()) {
+            throw new IllegalArgumentException("삭제할 굿즈 ID가 필요합니다.");
+        }
+
         for (Long goodsId : goodsIds) {
             GoodsEntity goods = goodsRepository.findById(goodsId)
                     .orElseThrow(() -> new IllegalArgumentException("굿즈를 찾을 수 없습니다: " + goodsId));
-
             // 보안 체크
             if (!goods.getUser().getUserId().equals(currentUserId)) {
                 throw new IllegalStateException("본인의 굿즈만 삭제할 수 있습니다.");
             }
-
             // isPublic 만 false로 둠
             goods.setIsPublic(false);
 
             goodsRepository.save(goods);
-
         }
+
     }
 
     /**
-     * Object Storage에서 이미지 삭제 (공통 메서드)
+     * 굿즈 선택
+     * @param user
+     * @param dto
+     * @return
      */
-    private void deleteImageFromStorage(String imageUrl) {
-        if (imageUrl == null || imageUrl.isEmpty()) {
-            return;
-        }
+    @Transactional
+    public SelectGoodsResponseDTO selectGoods(UserEntity user, SelectGoodsRequestDTO dto) {
+
+        byte[] goodsImgFileByte;
 
         try {
-            // URL에서 key 추출 (ObjectStorageService의 deleteProfileImage와 동일 로직)
-            int bucketIndex = imageUrl.indexOf(bucketName);
-            if (bucketIndex == -1) {
-                log.warn("버킷 이름이 URL에 없습니다: {}", imageUrl);
-                return;
-            }
-
-            String key = imageUrl.substring(bucketIndex + bucketName.length() + 1);
-            if (key.isEmpty()) {
-                log.warn("추출된 키가 비어있습니다: {}", imageUrl);
-                return;
-            }
-
-            DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
-                    .bucket(bucketName)
-                    .key(key)
-                    .build();
-
-            s3Client.deleteObject(deleteRequest);
-            log.info("Object Storage에서 이미지 삭제 성공: {}", key);
-
-        } catch (Exception e) {
-            log.warn("Object Storage 이미지 삭제 실패 (URL: {}): {}", imageUrl, e.getMessage());
-            // 실패해도 전체 트랜잭션 중단하지 않음 (이미지 없거나 이미 삭제된 경우 많음)
+            goodsImgFileByte = objectStorageService.downloadImage(dto.getGoodsImgUrl());
+        } catch (IOException e) {
+            log.error("이미지 다운로드 실패: {}", e.getMessage());
+            throw new RuntimeException("이미지 다운로드 실패: " + e.getMessage());
         }
-    }
-    
-    @Transactional
-    public SelectGoodsResponseDTO selectGoods(UserEntity user, SelectGoodsRequestDTO dto, String goodsImgUrl, MultipartFile goodsImgFile) {
+
+        MultipartFile goodsImgFile = byteArrayToMultipartFile(goodsImgFileByte);
+
+        String goodsImgUrl = "";
+
+        // 시안 선택한 이미지 url ObjectStorage에 저장
+        try {
+            goodsImgUrl = objectStorageService.uploadFile(goodsImgFile, user.getUserId(),
+                    "goods" + "/" + user.getUserId() + "/" + dto.getUploadImgGroupId()
+            );
+        } catch (IOException e) {
+            log.error("선택한 이미지 ObjectStorage 저장 실패: {}", e.getMessage());
+            throw new RuntimeException("선택한 이미지 ObjectStorage 저장 실패: " + e.getMessage());
+        }
+
+        // 결과 이미지 Object Storage 삭제
+        objectStorageService.deleteImage(dto.getResultImageUrl());
+
+        // 시안 3개 이미지 Object Storage 삭제
+        List<String> sampleGoodsImageUrls = dto.getSampleGoodsImageUrl();
+
+        for (String url : sampleGoodsImageUrls) {
+            objectStorageService.deleteImage(url);
+        }
+
         SelectGoodsResponseDTO response = new SelectGoodsResponseDTO();
 
         // 카테고리 조회
@@ -158,7 +163,7 @@ public class GoodsService {
 
         // 이미지 삭제
         for (String url : request.getGoodsSampleImgUrl()) {
-            deleteImageFromStorage(url);
+            objectStorageService.deleteImage(url);
         }
 
         response.setStatus("SUCCESS");
@@ -222,4 +227,300 @@ public class GoodsService {
 
         return response;
     }
+
+    /**
+     * 굿즈 이미지 생성 (전체 플로우)
+     * 1. 업로드 이미지 처리
+     * 2. YOLO API 호출 -> 객체 이미지 생성
+     * 3. Nano API 호출 -> 굿즈 이미지 생성
+     * 4. 굿즈 이미지 Object Storage 저장
+     */
+    @Transactional
+    public CreateGoodsImgResponseDTO createGoodsImage(UserEntity user, CreateGoodsImgRequestDTO dto) {
+
+        List<String> uploadImgUrlList = new ArrayList<>();
+
+        UploadImgGroupEntity uploadImgGroup = null;
+
+        // 기존에 이미 업로드 이미지가 없으면 PK 생성
+        if(dto.getPrevUploadImgGroupId() == null) {
+            // 업로드 이미지 그룹 PK 생성
+            uploadImgGroup = UploadImgGroupEntity.builder().build();
+            uploadImgGroupRepository.save(uploadImgGroup);
+        } else {
+            // 업로드 이미지 그룹 찾기
+            uploadImgGroup = uploadImgGroupRepository.findById(dto.getPrevUploadImgGroupId())
+                    .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 업로드 그룹입니다: " + dto.getPrevUploadImgGroupId()));
+        }
+
+        // 기존에 이미 업로드 이미지가 있으면 Object Storage 에 있는 uploadImage 삭제
+        if (dto.getPrevUploadImgGroupId() != null) {
+            List<UploadImgEntity> uploadImg = uploadImgRepository.findByUploadImgGroup(uploadImgGroup);
+            for (UploadImgEntity uploadImgEntity : uploadImg) {
+                objectStorageService.deleteImage(uploadImgEntity.getUploadImgUrl());
+            }
+        }
+
+        // 업로드 이미지 Object Storage 저장
+        if (dto.getUploadImages() != null) {
+            for (MultipartFile file : dto.getUploadImages()) {
+                try {
+                    uploadImgUrlList.add(objectStorageService.uploadFile(file, user.getUserId(),
+                            "upload" + "/" + user.getUserId() + "/" + uploadImgGroup.getUploadGroupId()));
+                } catch (IOException e) {
+                    log.error("업로드 이미지 Object Storage 저장 실패", e);
+                    throw new RuntimeException("업로드 이미지 Object Storage 저장 실패: " + e.getMessage());
+                }
+            }
+        }
+
+        // 기존에 업로드 이미지 그룹 아이디가 있을 경우 DB 값 삭제
+        if(dto.getPrevUploadImgGroupId() != null) {
+            List<UploadImgEntity> uploadImgEntityList = uploadImgRepository.findByUploadImgGroup(uploadImgGroup);
+            for(UploadImgEntity uploadImgEntity : uploadImgEntityList) {
+                uploadImgRepository.delete(uploadImgEntity);
+            }
+        }
+
+        // 업로드 이미지 DB 저장
+        if (dto.getUploadImages() != null) {
+            for(int i = 0; i < dto.getUploadImages().length; i++) {
+                UploadImgEntity uploadImgEntity = UploadImgEntity.builder()
+                        .uploadImgUrl(uploadImgUrlList.get(i))
+                        .uploadImgSize(dto.getUploadImages()[i].getSize())
+                        .user(user)
+                        .uploadImgGroup(uploadImgGroup)
+                        .build();
+
+                uploadImgRepository.save(uploadImgEntity);
+            }
+        }
+
+        // yolo api 호출 -> 객체 이미지 생성
+        List<byte[]> objectImgBytesList = yoloService.createObjectDetetctionImage(dto.getUploadImages());
+
+        // 나노바나나 api 호출 -> 굿즈 이미지 생성
+        MultipartFile goodsImgFile = nanoService.createGoodsImage(objectImgBytesList, dto);
+
+        // 굿즈 이미지 이미 Object Storage에 저장되어있으면 삭제
+        if(dto.getPrevGoodsImageUrl() != null) {
+            objectStorageService.deleteImage(dto.getPrevGoodsImageUrl());
+        }
+
+        // 굿즈 이미지 파일 Object Storage 저장
+        String goodsImgUrl;
+        try {
+            goodsImgUrl = objectStorageService.uploadFile(goodsImgFile, user.getUserId(), 
+                    "temp" + "/" + user.getUserId() + "/" + uploadImgGroup.getUploadGroupId());
+        } catch (IOException e) {
+            log.error("굿즈 이미지 Object Storage 저장 실패", e);
+            throw new RuntimeException("굿즈 이미지 Object Storage 저장 실패: " + e.getMessage());
+        }
+
+        return CreateGoodsImgResponseDTO.builder()
+                .status("SUCCESS")
+                .message("굿즈 이미지 생성 완료")
+                .goodsImgUrl(goodsImgUrl)
+                .goodsImgSize(goodsImgFile.getSize())
+                .uploadImgGroupId(uploadImgGroup.getUploadGroupId())
+                .build();
+    }
+
+    /**
+     * 굿즈 시안 생성
+     * 나노바나나 API를 통해 굿즈 시안 이미지 기존 포함 3개 생성
+     */
+    public CreateGoodsSampleResponseDTO createGoodsSample(UserEntity user, CreateGoodsSampleRequestDTO dto) {
+
+        // 이미지 다운로드
+        byte[] resultGoodsImageFileByte;
+        try {
+            resultGoodsImageFileByte = objectStorageService.downloadImage(dto.getResultImageUrl());
+        } catch (IOException e) {
+            log.error("이미지 다운로드 실패: {}", e.getMessage());
+            throw new RuntimeException("이미지 다운로드 실패: " + e.getMessage());
+        }
+
+        if (resultGoodsImageFileByte == null || resultGoodsImageFileByte.length == 0) {
+            throw new RuntimeException("이미지 파일 또는 URL이 없습니다.");
+        }
+
+        // byte[] -> MultipartFile 로 변환
+        MultipartFile resultGoodsImageFile = byteArrayToMultipartFile(resultGoodsImageFileByte);
+
+        // 나노바나나를 통해 2개의 시안 이미지 생성
+        List<MultipartFile> sampleGoodsImages = nanoService.createGoodsSampleImage(resultGoodsImageFileByte, dto.getCategory());
+
+        List<String> sampleImgUrls = new ArrayList<>();
+        String folderPath = "sample" + "/" + user.getUserId() + "/" + dto.getUploadImgGroupId();
+
+        // 기존 이미지 업로드
+        try {
+            String sampleImgUrl = objectStorageService.uploadFile(resultGoodsImageFile, user.getUserId(), folderPath);
+            sampleImgUrls.add(sampleImgUrl);
+        } catch (IOException e) {
+            log.error("시안 생성 실패: {}", e.getMessage(), e);
+            throw new RuntimeException("시안 생성 실패: " + e.getMessage());
+        }
+
+        // 생성된 시안 이미지들 업로드
+        for (MultipartFile multipartFile : sampleGoodsImages) {
+            try {
+                String sampleImgUrl = objectStorageService.uploadFile(multipartFile, user.getUserId(), folderPath);
+                sampleImgUrls.add(sampleImgUrl);
+            } catch (IOException e) {
+                log.error("시안 생성 실패: {}", e.getMessage(), e);
+                throw new RuntimeException("시안 생성 실패: " + e.getMessage());
+            }
+        }
+
+        return CreateGoodsSampleResponseDTO.builder()
+                .status("SUCCESS")
+                .message("시안 생성 완료")
+                .goodsSampleImgUrls(sampleImgUrls)
+                .build();
+    }
+
+    /**
+     * 이미지 다운로드
+     * @param imageUrl
+     * @return
+     */
+    public ResponseEntity<byte[]> downloadImage(String imageUrl) {
+        try {
+            byte[] imageBytes = objectStorageService.downloadImage(imageUrl);
+            
+            // Content-Type 설정 (이미지 타입 추출)
+            String contentType = "image/jpeg"; // 기본값
+            if (imageUrl.toLowerCase().endsWith(".png")) {
+                contentType = "image/png";
+            } else if (imageUrl.toLowerCase().endsWith(".gif")) {
+                contentType = "image/gif";
+            }
+            
+            // Content-Disposition 헤더 설정 (다운로드 파일명)
+            String fileName = imageUrl.substring(imageUrl.lastIndexOf("/") + 1);
+            if (fileName.isEmpty() || !fileName.contains(".")) {
+                fileName = "image.jpg";
+            }
+
+            return ResponseEntity.ok()
+                    .header("Content-Type", contentType)
+                    .header("Content-Disposition", "attachment; filename=\"" + fileName + "\"")
+                    .body(imageBytes);
+        } catch (Exception e) {
+            log.error("이미지 다운로드 실패: {}", e.getMessage());
+            throw new RuntimeException("이미지 다운로드 실패: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 이미지 여러건 다운로드
+     * @param imageUrls
+     */
+    public ResponseEntity<byte[]> downloadImagesAsZip(List<String> imageUrls) {
+
+        if (imageUrls == null || imageUrls.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ZipOutputStream zos = new ZipOutputStream(baos);
+
+            for (int i = 0; i < imageUrls.size(); i++) {
+                String imageUrl = imageUrls.get(i);
+                try {
+                    byte[] imageBytes = objectStorageService.downloadImage(imageUrl);
+
+                    // 파일명 추출
+                    String fileName = imageUrl.substring(imageUrl.lastIndexOf("/") + 1);
+                    if (fileName.isEmpty() || !fileName.contains(".")) {
+                        // 확장자 추출 시도
+                        String contentType = "image/jpeg";
+                        if (imageUrl.toLowerCase().contains(".png")) {
+                            contentType = "image/png";
+                            fileName = "image_" + (i + 1) + ".png";
+                        } else if (imageUrl.toLowerCase().contains(".gif")) {
+                            contentType = "image/gif";
+                            fileName = "image_" + (i + 1) + ".gif";
+                        } else {
+                            fileName = "image_" + (i + 1) + ".jpg";
+                        }
+                    }
+
+                    // ZIP 엔트리 추가
+                    ZipEntry entry = new ZipEntry(fileName);
+                    entry.setSize(imageBytes.length);
+                    zos.putNextEntry(entry);
+                    zos.write(imageBytes);
+                    zos.closeEntry();
+                } catch (Exception e) {
+                    log.warn("이미지 다운로드 실패 (URL: {}): {}", imageUrl, e.getMessage());
+                    // 실패한 이미지는 건너뛰고 계속 진행
+                }
+            }
+
+            zos.close();
+            byte[] zipBytes = baos.toByteArray();
+
+            return ResponseEntity.ok()
+                    .header("Content-Type", "application/zip")
+                    .header("Content-Disposition", "attachment; filename=\"goods_images.zip\"")
+                    .body(zipBytes);
+        } catch (Exception e) {
+            log.error("ZIP 파일 생성 실패: {}", e.getMessage());
+            throw new RuntimeException("ZIP 파일 생성 실패: " + e.getMessage());
+        }
+
+    }
+
+    /**
+     * byte[] -> MultipartFile 변환 헬퍼 메서드
+     */
+    private MultipartFile byteArrayToMultipartFile(byte[] byteArray) {
+        return new MultipartFile() {
+            @Override
+            public String getName() {
+                return "result-image";
+            }
+
+            @Override
+            public String getOriginalFilename() {
+                return "result-image.jpg";
+            }
+
+            @Override
+            public String getContentType() {
+                return "image/jpeg";
+            }
+
+            @Override
+            public boolean isEmpty() {
+                return byteArray == null || byteArray.length == 0;
+            }
+
+            @Override
+            public long getSize() {
+                return byteArray != null ? byteArray.length : 0;
+            }
+
+            @Override
+            public byte[] getBytes() throws IOException {
+                return byteArray;
+            }
+
+            @Override
+            public java.io.InputStream getInputStream() throws IOException {
+                return new java.io.ByteArrayInputStream(byteArray);
+            }
+
+            @Override
+            public void transferTo(java.io.File dest) throws IOException, IllegalStateException {
+                throw new UnsupportedOperationException("Not implemented");
+            }
+        };
+    }
+
+
 }
