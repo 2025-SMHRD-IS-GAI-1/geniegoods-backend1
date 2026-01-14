@@ -26,7 +26,7 @@ public class SwaggerConfig {
 
         return new OpenAPI()
                 .info(new Info()
-                        .title("내 프로젝트 API 명세서")
+                        .title("지니굿즈 API 명세서")
                         .description("Spring Boot 4 기반 API 문서입니다.")
                         .version("1.0.0"))
                 .addSecurityItem(securityRequirement)

@@ -21,7 +21,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -161,7 +160,6 @@ public class OrderService {
                 .detailAddress(order.getDetailAddress())
                 .subtotal(subtotal)
                 .shippingFee(SHIPPING_FEE)
-                .finalAmount(order.getTotalAmount())
                 .items(items)
                 .build();
     }
@@ -169,7 +167,7 @@ public class OrderService {
     /**
      * 기간별 + 페이징 주문 목록 조회 (PageRequest 사용)
      */
-    public List<AllOrderResponseDTO> getMyOrdersManualPaging(Long userId, Integer months, int page) {
+    public MyOrderResponseDTO getMyOrdersManualPaging(Long userId, Integer months, int page) {
         LocalDateTime cutoffDate = (months == null) ? null : LocalDateTime.now().minusMonths(months);
 
         // PageRequest 생성 (0-based page index)
@@ -180,10 +178,21 @@ public class OrderService {
                 orderRepository.findByUserUserIdOrderByOrderedAtDesc(userId, pageable) :
                 orderRepository.findByUserUserIdAndOrderedAtAfterOrderByOrderedAtDesc(userId, cutoffDate, pageable);
 
-        // Page에서 content 추출하여 DTO 변환
-        return orderPage.getContent().stream()
+        List<AllOrderResponseDTO> orders = orderPage.getContent().stream()
                 .map(this::convertToAllOrderResponseDto)
                 .toList();
+
+        int totalElements = (int) ((cutoffDate == null) ?
+                orderRepository.countByUserUserId(userId) :
+                orderRepository.countByUserUserIdAndOrderedAtAfter(userId, cutoffDate));
+
+        int totalPages = (int) Math.ceil((double) totalElements / PAGE_SIZE);
+
+        return MyOrderResponseDTO.builder()
+                .contents(orders)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .build();
     }
 
     /**
@@ -240,22 +249,36 @@ public class OrderService {
      * 주문 주소 수정
      */
     public void updateOrderAddress(Long orderId, OrderAddressRequestDTO addressRequest) {
+
         OrderEntity order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다."));
         order.setZipcode(addressRequest.getZipcode());
         order.setAddress(addressRequest.getAddress());
         order.setDetailAddress(addressRequest.getDetailAddress());
         orderRepository.save(order);
-    }
-    
- // 본인 주문 조회 (보안용)
-    public Optional<OrderEntity> findByOrderIdAndUserId(Long orderId, Long userId) {
-        return orderRepository.findByOrderIdAndUserUserId(orderId, userId);
+
     }
 
-    // 주문 삭제
-    @Transactional
-    public void deleteOrder(Long orderId) {
-        orderRepository.deleteById(orderId);
+    /**
+     * 주문 취소
+     * @param orderId
+     * @param userId
+     */
+    public void cancelOrder(Long orderId, Long userId) {
+        OrderEntity order = orderRepository.findByOrderIdAndUserUserId(orderId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없거나 권한이 없습니다."));
+
+        // 이미 취소됐거나 배송 시작됐으면 불가
+        if (order.getStatus() == OrderStatus.CANCELED) {
+            throw new IllegalArgumentException("이미 취소된 주문입니다.");
+        }
+        if (order.getStatus() == OrderStatus.DELIVERING || order.getStatus() == OrderStatus.DELIVERED) {
+            throw new IllegalArgumentException("배송이 시작된 주문은 취소할 수 없습니다.");
+        }
+
+        // 취소 처리
+        order.setStatus(OrderStatus.CANCELED);
+
+        orderRepository.save(order);
     }
 }
