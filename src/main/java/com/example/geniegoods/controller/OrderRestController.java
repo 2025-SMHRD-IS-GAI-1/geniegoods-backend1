@@ -69,14 +69,13 @@ public class OrderRestController {
     }
 
     @Operation(summary = "주문 취소", description = "주문 취소")
-    @PostMapping("/{orderId}/cancel")
+    @PostMapping("/cancel")
     public ResponseEntity<CommonResponseDTO> cancelOrder(
             @Schema(description = "주문 PK", example = "1")
-            @PathVariable(name = "orderId") Long orderId,
+            @RequestBody OrderCancelRequestDTO request,
             @AuthenticationPrincipal UserEntity user) {
 
-        orderService.cancelOrder(orderId, user.getUserId());
-
+        orderService.cancelOrder(request.getOrderId(), user.getUserId());
 
         return ResponseEntity.ok(CommonResponseDTO.builder()
                 .message("주문이 취소되었습니다. 환불 처리될 예정입니다.")
