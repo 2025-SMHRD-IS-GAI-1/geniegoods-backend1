@@ -15,4 +15,6 @@ public class CurrentUserResponseDTO {
     private String nickname;
     @Schema(description = "유저 프로필 url", example = "true")
     private String profileUrl;
+    @Schema(description = "유저 구독 플랜", example = "FREE")
+    private String subscriptionPlan;
 }
