@@ -30,17 +30,19 @@ public class GoodsRestController {
 
     private final ObjectStorageService objectStorageService;
 
-    @Operation(summary = "굿즈 일괄 삭제", description = "선택된 굿즈 일괄 삭제")
-    @DeleteMapping("/bulk")
-    public ResponseEntity<CommonResponseDTO> deleteGoodsBulk(
+    @PostMapping("/bulk-delete")
+    @Operation(summary = "선택된 굿즈 일괄 삭제")
+    public ResponseEntity<CommonResponseDTO> bulkDeleteGoods(
             @AuthenticationPrincipal UserEntity currentUser,
-            @Schema(description = "삭제할 굿즈 ID 리스트", example = "[1, 2, 3]", requiredMode = Schema.RequiredMode.REQUIRED)
-            @RequestParam List<Long> goodsIds) {
+            @RequestBody GoodsBulkDeleteRequest request) {
 
-        goodsService.deleteGoodsByIds(goodsIds, currentUser.getUserId());
+        goodsService.deleteGoodsByIds(
+            request.getGoodsIds(), 
+            currentUser.getUserId()
+        );
 
         return ResponseEntity.ok(CommonResponseDTO.builder()
-                .message("선택된 굿즈와 이미지가 완전히 삭제되었습니다.")
+                .message("선택된 굿즈가 삭제되었습니다")
                 .build());
     }
 
