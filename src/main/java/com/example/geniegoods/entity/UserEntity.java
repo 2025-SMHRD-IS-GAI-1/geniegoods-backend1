@@ -60,6 +60,10 @@ public class UserEntity implements UserDetails {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    @Column(nullable = false, columnDefinition = "VARCHAR(50) DEFAULT 'FREE'")
+    @Builder.Default
+    private String subscriptionPlan = "FREE";
+
     @JsonIgnore
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default

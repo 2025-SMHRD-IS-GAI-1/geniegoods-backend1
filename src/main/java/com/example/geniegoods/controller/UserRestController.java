@@ -42,6 +42,7 @@ public class UserRestController {
                 CurrentUserResponseDTO.builder()
                         .nickname(user.getNickname())
                         .profileUrl(user.getProfileUrl())
+                        .subscriptionPlan(user.getSubscriptionPlan())
                 .build()
         );
     }
