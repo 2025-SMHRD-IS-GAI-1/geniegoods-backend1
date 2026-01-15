@@ -1,5 +1,6 @@
 package com.example.geniegoods.controller;
 
+import com.example.geniegoods.dto.common.CommonResponseDTO;
 import com.example.geniegoods.dto.user.*;
 import com.example.geniegoods.entity.UserEntity;
 import com.example.geniegoods.repository.UserRepository;
@@ -35,13 +36,19 @@ public class UserRestController {
 
     @Operation(summary = "현재 사용자 정보 조회", description = "Cookie에 저장된 AccessToken을 통해 현재 로그인한 사용자의 정보를 가져옵니다.")
     @GetMapping("/me")
-    public ResponseEntity<UserEntity> getCurrentUser(@AuthenticationPrincipal UserEntity user) {
-        return ResponseEntity.ok(user);
+    public ResponseEntity<CurrentUserResponseDTO> getCurrentUser(@AuthenticationPrincipal UserEntity user) {
+
+        return ResponseEntity.ok(
+                CurrentUserResponseDTO.builder()
+                        .nickname(user.getNickname())
+                        .profileUrl(user.getProfileUrl())
+                .build()
+        );
     }
 
     @Operation(summary = "로그아웃", description = "쿠키에 저장된 AccessToken과 RefreshToken을 무효화합니다.")
     @PostMapping("/logout")
-    public ResponseEntity<Map<String, String>> logout(HttpServletResponse response) {
+    public ResponseEntity<CommonResponseDTO> logout(HttpServletResponse response) {
         // AccessToken 쿠키 삭제
         Cookie accessTokenCookie = new Cookie("accessToken", null);
         accessTokenCookie.setHttpOnly(true);
@@ -60,12 +67,17 @@ public class UserRestController {
         refreshTokenCookie.setAttribute("SameSite", "Lax"); // SameSite 속성도 설정
         response.addCookie(refreshTokenCookie);
         
-        return ResponseEntity.ok(Map.of("message", "로그아웃되었습니다."));
+        return ResponseEntity.ok(
+                CommonResponseDTO
+                .builder()
+                .message("로그아웃 되었습니다.")
+                .build()
+        );
     }
 
     @Operation(summary = "refreshToken 발급", description = "RefreshToken으로 AccessToken 재발급")
     @PostMapping("/refresh")
-    public ResponseEntity<Map<String, String>> refreshToken(
+    public ResponseEntity<CommonResponseDTO> refreshToken(
             HttpServletRequest request,
             HttpServletResponse response) {
         
@@ -83,7 +95,10 @@ public class UserRestController {
             }
             
             if (refreshToken == null || !jwtUtil.validateToken(refreshToken)) {
-                return ResponseEntity.status(401).body(Map.of("error", "Invalid refresh token"));
+                return ResponseEntity.status(401).body(
+                        CommonResponseDTO.builder()
+                                .message("Invalid refresh token")
+                                .build());
             }
             
             // refreshToken에서 userId 추출
@@ -103,10 +118,18 @@ public class UserRestController {
             accessTokenCookie.setAttribute("SameSite", "Lax");
             response.addCookie(accessTokenCookie);
             
-            return ResponseEntity.ok(Map.of("message", "Token refreshed"));
+            return ResponseEntity.ok(
+                    CommonResponseDTO
+                            .builder()
+                            .message("Token refreshed")
+                            .build());
         } catch (Exception e) {
             log.error("토큰 갱신 실패", e);
-            return ResponseEntity.status(401).body(Map.of("error", "Token refresh failed"));
+            return ResponseEntity.status(401).body(
+                    CommonResponseDTO
+                            .builder()
+                            .message("Token refresh failed")
+                            .build());
         }
     }
 
