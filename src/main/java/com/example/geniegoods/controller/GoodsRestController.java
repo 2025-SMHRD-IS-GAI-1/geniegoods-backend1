@@ -30,14 +30,14 @@ public class GoodsRestController {
 
     private final ObjectStorageService objectStorageService;
 
-    @PostMapping("/bulk-delete")
-    @Operation(summary = "선택된 굿즈 일괄 삭제")
+    @DeleteMapping("/bulk")
+    @Operation(summary = "선택된 굿즈 일괄 삭제", description = "선택된 굿즈 일괄 삭제")
     public ResponseEntity<CommonResponseDTO> bulkDeleteGoods(
             @AuthenticationPrincipal UserEntity currentUser,
-            @RequestBody GoodsBulkDeleteRequest request) {
+            @RequestParam(name = "goodsIds") List<Long> goodsIds) {
 
         goodsService.deleteGoodsByIds(
-            request.getGoodsIds(), 
+            goodsIds, 
             currentUser.getUserId()
         );
 
