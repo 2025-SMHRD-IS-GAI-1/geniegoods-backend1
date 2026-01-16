@@ -1,10 +1,6 @@
 package com.example.geniegoods.service;
 
-import com.example.geniegoods.dto.user.CurrentUserResponseDTO;
-import com.example.geniegoods.dto.user.NickCheckResponseDTO;
-import com.example.geniegoods.dto.user.NickUpdateResponseDTO;
-import com.example.geniegoods.dto.user.ProfileImgResponseDTO;
-import com.example.geniegoods.dto.user.WithDrawResponseDTO;
+import com.example.geniegoods.dto.user.*;
 import com.example.geniegoods.entity.SubScribeEntity;
 import com.example.geniegoods.entity.UserEntity;
 import com.example.geniegoods.repository.GoodsRepository;
@@ -12,6 +8,7 @@ import com.example.geniegoods.repository.SubScribeRepository;
 import com.example.geniegoods.repository.UserRepository;
 import com.example.geniegoods.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,11 +16,12 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -57,12 +55,6 @@ public class UserService {
         LocalDateTime subscriptionExpiryDate = null;
         if(subScribe.isPresent()) {
             subscriptionExpiryDate = subScribe.get().getStartDate().plusMonths(1);
-        }
-        
-        // 2010-01-01 00:00:00 형식으로 변환
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        if(subscriptionExpiryDate != null) {
-            subscriptionExpiryDate = LocalDateTime.parse(subscriptionExpiryDate.format(formatter), formatter);
         }
 
         return CurrentUserResponseDTO.builder()
@@ -272,6 +264,30 @@ public class UserService {
     public UserEntity findById(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+    }
+
+    // ===== 구독 만료 처리 메서드 =====
+    /**
+     * 구독 기간이 만료된 사용자들을 FREE 플랜으로 변경
+     * @return 변경된 사용자 수
+     */
+    @Transactional
+    public int expireSubscriptions() {
+        List<SubScribeEntity> expiredSubscriptions = subScribeRepository.findExpiredSubscriptions(LocalDateTime.now());
+        
+        int count = 0;
+        for (SubScribeEntity subscription : expiredSubscriptions) {
+            UserEntity user = subscription.getUser();
+            // PRO 플랜이고 아직 삭제되지 않은 사용자만 처리
+            if ("PRO".equals(user.getSubscriptionPlan()) && !user.isDeleted()) {
+                user.setSubscriptionPlan("FREE");
+                user.setUpdatedAt(LocalDateTime.now());
+                userRepository.save(user);
+                count++;
+            }
+        }
+        
+        return count;
     }
 
 }

@@ -40,6 +40,8 @@ public class SubScribeService {
         currentUser.setSubscriptionPlan(subscriptionPlan);
 
         userRepository.save(currentUser);
+        LocalDateTime subscriptionExpiryDate = null;
+
 
         // 플랜 FREE 가 아닐때만 DB insert
         if(!subscriptionPlan.equals("FREE")) {
@@ -50,16 +52,21 @@ public class SubScribeService {
                 throw new IllegalArgumentException("이미 구독 기간이 있습니다.");
             }
 
+            LocalDateTime startDateTime = LocalDateTime.now();
+            subscriptionExpiryDate = startDateTime.plusMonths(1);
+
             subScribeRepository.save(SubScribeEntity.builder()
                     .method(PaymentMethod.from(request.getMethod()))
                     .planName(subscriptionPlan)
                     .price(9900)
+                    .startDate(startDateTime)
                     .user(currentUser)
                     .build());
         }
 
         return ChangeSubScribeResponseDTO.builder()
                 .subscriptionPlan(request.getSubscriptionPlan())
+                .subscriptionExpiryDate(subscriptionExpiryDate)
                 .build();
     }
 }
