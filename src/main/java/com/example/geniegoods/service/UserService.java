@@ -19,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -56,6 +57,12 @@ public class UserService {
         LocalDateTime subscriptionExpiryDate = null;
         if(subScribe.isPresent()) {
             subscriptionExpiryDate = subScribe.get().getStartDate().plusMonths(1);
+        }
+        
+        // 2010-01-01 00:00:00 형식으로 변환
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        if(subscriptionExpiryDate != null) {
+            subscriptionExpiryDate = LocalDateTime.parse(subscriptionExpiryDate.format(formatter), formatter);
         }
 
         return CurrentUserResponseDTO.builder()

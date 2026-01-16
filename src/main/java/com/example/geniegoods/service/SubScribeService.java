@@ -10,6 +10,9 @@ import com.example.geniegoods.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 public class SubScribeService {
@@ -40,6 +43,13 @@ public class SubScribeService {
 
         // 플랜 FREE 가 아닐때만 DB insert
         if(!subscriptionPlan.equals("FREE")) {
+
+            // 현재 시간 기준 1달 전부터 현재까지 기존에 이미 구독기간이 있을 경우 막음
+            Optional<SubScribeEntity> subScribe = subScribeRepository.findByUserAndStartDateBetween(currentUser, LocalDateTime.now().minusMonths(1), LocalDateTime.now());
+            if(subScribe.isPresent()) {
+                throw new IllegalArgumentException("이미 구독 기간이 있습니다.");
+            }
+
             subScribeRepository.save(SubScribeEntity.builder()
                     .method(PaymentMethod.from(request.getMethod()))
                     .planName(subscriptionPlan)
