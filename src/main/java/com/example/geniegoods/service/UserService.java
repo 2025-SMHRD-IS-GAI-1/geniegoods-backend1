@@ -47,7 +47,7 @@ public class UserService {
 
     // 현재 사용자 정보 조회
     public CurrentUserResponseDTO getCurrentUserInfo(UserEntity user) {
-        Optional<SubScribeEntity> subScribe = null;
+        Optional<SubScribeEntity> subScribe = Optional.empty();
         if(user.getSubscriptionPlan().equals("PRO")) {
             // 한달 이전 까지 있던 기간 구독 정보 조회
             subScribe = subScribeRepository.findByUserAndStartDateBetween(user, LocalDateTime.now().minusMonths(1), LocalDateTime.now());
