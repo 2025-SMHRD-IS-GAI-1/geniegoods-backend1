@@ -1,5 +1,7 @@
 package com.example.geniegoods.dto.user;
 
+import java.time.LocalDateTime;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 
@@ -17,4 +19,6 @@ public class CurrentUserResponseDTO {
     private String profileUrl;
     @Schema(description = "유저 구독 플랜", example = "FREE")
     private String subscriptionPlan;
+    @Schema(description = "유저 구독 기간", example = "2026-01-01")
+    private LocalDateTime subscriptionExpiryDate;
 }

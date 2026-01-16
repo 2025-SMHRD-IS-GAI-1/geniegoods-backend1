@@ -1,11 +1,14 @@
 package com.example.geniegoods.service;
 
+import com.example.geniegoods.dto.user.CurrentUserResponseDTO;
 import com.example.geniegoods.dto.user.NickCheckResponseDTO;
 import com.example.geniegoods.dto.user.NickUpdateResponseDTO;
 import com.example.geniegoods.dto.user.ProfileImgResponseDTO;
 import com.example.geniegoods.dto.user.WithDrawResponseDTO;
+import com.example.geniegoods.entity.SubScribeEntity;
 import com.example.geniegoods.entity.UserEntity;
 import com.example.geniegoods.repository.GoodsRepository;
+import com.example.geniegoods.repository.SubScribeRepository;
 import com.example.geniegoods.repository.UserRepository;
 import com.example.geniegoods.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +21,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +29,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final GoodsRepository goodsRepository;  // 굿즈 비공개 처리용
+    private final SubScribeRepository subScribeRepository;
     private final ObjectStorageService objectStorageService;
     private final JwtUtil jwtUtil;
 
@@ -38,6 +43,27 @@ public class UserService {
         Map<String, String> response = new HashMap<>();
         response.put("accessToken", accessToken);
         return response;
+    }
+
+    // 현재 사용자 정보 조회
+    public CurrentUserResponseDTO getCurrentUserInfo(UserEntity user) {
+        Optional<SubScribeEntity> subScribe = null;
+        if(user.getSubscriptionPlan().equals("PRO")) {
+            // 한달 이전 까지 있던 기간 구독 정보 조회
+            subScribe = subScribeRepository.findByUserAndStartDateBetween(user, LocalDateTime.now().minusMonths(1), LocalDateTime.now());
+        }
+
+        LocalDateTime subscriptionExpiryDate = null;
+        if(subScribe.isPresent()) {
+            subscriptionExpiryDate = subScribe.get().getStartDate().plusMonths(1);
+        }
+
+        return CurrentUserResponseDTO.builder()
+                .nickname(user.getNickname())
+                .profileUrl(user.getProfileUrl())
+                .subscriptionPlan(user.getSubscriptionPlan())
+                .subscriptionExpiryDate(subscriptionExpiryDate)
+                .build();
     }
 
     // 프로필 이미지 업데이트

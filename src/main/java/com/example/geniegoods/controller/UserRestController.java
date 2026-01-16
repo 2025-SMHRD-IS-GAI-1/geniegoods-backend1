@@ -37,14 +37,8 @@ public class UserRestController {
     @Operation(summary = "현재 사용자 정보 조회", description = "Cookie에 저장된 AccessToken을 통해 현재 로그인한 사용자의 정보를 가져옵니다.")
     @GetMapping("/me")
     public ResponseEntity<CurrentUserResponseDTO> getCurrentUser(@AuthenticationPrincipal UserEntity user) {
-
-        return ResponseEntity.ok(
-                CurrentUserResponseDTO.builder()
-                        .nickname(user.getNickname())
-                        .profileUrl(user.getProfileUrl())
-                        .subscriptionPlan(user.getSubscriptionPlan())
-                .build()
-        );
+        CurrentUserResponseDTO response = userService.getCurrentUserInfo(user);
+        return ResponseEntity.ok(response);
     }
 
     @Operation(summary = "로그아웃", description = "쿠키에 저장된 AccessToken과 RefreshToken을 무효화합니다.")
