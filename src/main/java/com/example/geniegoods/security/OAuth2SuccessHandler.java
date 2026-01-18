@@ -6,12 +6,14 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.net.URLEncoder;
 
 /**
  * OAuth2 로그인 성공 핸들러
@@ -25,7 +27,9 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 	private final JwtUtil jwtUtil;
 	
 	// 프론트엔드 URL
-	private static final String FRONTEND_URL = "http://localhost:5173";
+	// 환경 변수에서 읽어오도록 수정
+	@Value("${app.frontend.url:http://localhost:5173}")
+	private String FRONTEND_URL;
 	
 	// 쿠키 이름
 	private static final String ACCESS_TOKEN_COOKIE_NAME = "accessToken";
@@ -74,12 +78,12 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 			getRedirectStrategy().sendRedirect(request, response, redirectUrl);
 		} catch (IllegalStateException e) {
 			// 탈퇴한 계정 등의 비즈니스 로직 예외 처리
-			String errorMessage = java.net.URLEncoder.encode(e.getMessage(), "UTF-8");
+			String errorMessage = URLEncoder.encode(e.getMessage(), "UTF-8");
 			String redirectUrl = String.format("%s/oauth/callback?error=%s", FRONTEND_URL, errorMessage);
 			getRedirectStrategy().sendRedirect(request, response, redirectUrl);
 		} catch (Exception e) {
 			// 기타 예외 처리
-			String errorMessage = java.net.URLEncoder.encode("로그인 처리 중 오류가 발생했습니다.", "UTF-8");
+			String errorMessage = URLEncoder.encode("로그인 처리 중 오류가 발생했습니다.", "UTF-8");
 			String redirectUrl = String.format("%s/oauth/callback?error=%s", FRONTEND_URL, errorMessage);
 			getRedirectStrategy().sendRedirect(request, response, redirectUrl);
 		}
