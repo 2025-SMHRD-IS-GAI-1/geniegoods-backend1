@@ -20,7 +20,7 @@ public interface SubScribeRepository extends JpaRepository<SubScribeEntity, Long
      * @param now 현재 시간
      * @return 구독 기간이 만료된 구독 정보 리스트
      */
-    @Query(value = "select * from\n" +
+    @Query(value = "select s.* from\n" +
             "tb_subscribe s inner join tb_user u\n" +
             "on s.user_id = u.user_id\n" +
             "where u.subscription_plan = \"PRO\"\n" +
