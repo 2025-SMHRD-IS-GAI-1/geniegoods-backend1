@@ -11,7 +11,6 @@ import lombok.*;
 public class NanobananaComposeResponseDTO {
     private String message;
     private String output_path;
-    private Boolean saved;
     private String result_data;  // base64 인코딩된 이미지 데이터
 }
 
