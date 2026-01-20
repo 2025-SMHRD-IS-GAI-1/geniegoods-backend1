@@ -140,7 +140,6 @@ public class GoodsService {
 
         goodsRepository.save(goods);
 
-        response.setStatus("SUCCESS");
         response.setMessage("굿즈 선택 완료");
         return response;
     }
@@ -151,14 +150,10 @@ public class GoodsService {
      * @return
      */
     public DeleteGoodsSampleResponseDTO deleteSampleImg(DeleteGoodsSampleRequestDTO request) {
-        DeleteGoodsSampleResponseDTO response = new DeleteGoodsSampleResponseDTO();
 
         // url이 안넘어 올때
         if(request.getGoodsSampleImgUrl().isEmpty()) {
-            log.warn("이미지 URL이 비어있습니다.");
-            response.setStatus("ERROR");
-            response.setMessage("이미지 URL이 비어있습니다.");
-            return response;
+            throw new IllegalArgumentException("존재하지 않는 카테고리입니다");
         }
 
         // 이미지 삭제
@@ -166,9 +161,9 @@ public class GoodsService {
             objectStorageService.deleteImage(url);
         }
 
-        response.setStatus("SUCCESS");
-        response.setMessage("이미지 삭제 완료");
-        return response;
+        return DeleteGoodsSampleResponseDTO.builder()
+                .message("이미지 삭제 완료")
+                .build();
     }
 
     /**
@@ -318,7 +313,6 @@ public class GoodsService {
         }
 
         return CreateGoodsImgResponseDTO.builder()
-                .status("SUCCESS")
                 .message("굿즈 이미지 생성 완료")
                 .goodsImgUrl(goodsImgUrl)
                 .goodsImgSize(goodsImgFile.getSize())
@@ -375,7 +369,6 @@ public class GoodsService {
         }
 
         return CreateGoodsSampleResponseDTO.builder()
-                .status("SUCCESS")
                 .message("시안 생성 완료")
                 .goodsSampleImgUrls(sampleImgUrls)
                 .build();
