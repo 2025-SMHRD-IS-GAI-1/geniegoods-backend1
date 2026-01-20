@@ -108,6 +108,14 @@ public class GoodsRestController {
         return ResponseEntity.ok(goodsService.selectAllMyGoods(user));
     }
 
+    @Operation(summary = "오늘 생성한 굿즈 개수 조회", description = "오늘 생성한 굿즈 개수 조회")
+    @GetMapping("/today-count")
+    public ResponseEntity<GoodsTodayCountResponseDTO> getTodayGoodsCount(
+            @AuthenticationPrincipal UserEntity user
+    ) {
+        return ResponseEntity.ok(goodsService.getTodayGoodsCount(user.getUserId()));
+    }
+
     @Operation(summary = "굿즈 둘러보기", description = "굿즈 둘러보기 (비회원도 가능)")
     @io.swagger.v3.oas.annotations.security.SecurityRequirements
     @GetMapping("/browse")

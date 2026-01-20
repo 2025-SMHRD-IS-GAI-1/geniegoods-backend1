@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -36,4 +37,8 @@ public interface GoodsRepository extends JpaRepository<GoodsEntity, Long> {
     	Page<GoodsBrowseProjection> findByCategoryWithViews(@Param("categoryId") Long categoryId, Pageable pageable);
 
     List<GoodsEntity> findByUserAndIsPublicOrderByCreatedAtDesc(UserEntity user, boolean b);
+
+    // 오늘 생성한 굿즈 개수 조회
+    @Query("SELECT COUNT(g) FROM GoodsEntity g WHERE g.user.userId = :userId AND DATE(g.createdAt) = DATE(:today)")
+    int countByUserAndCreatedAtToday(@Param("userId") Long userId, @Param("today") LocalDateTime today);
 }

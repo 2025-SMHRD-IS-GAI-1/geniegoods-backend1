@@ -66,6 +66,19 @@ public class GoodsService {
     }
 
     /**
+     * 오늘 생성한 굿즈 개수 조회
+     * @param userId 사용자 ID
+     * @return 오늘 생성한 굿즈 개수
+     */
+    public GoodsTodayCountResponseDTO getTodayGoodsCount(Long userId) {
+        LocalDateTime today = LocalDateTime.now();
+        int count = goodsRepository.countByUserAndCreatedAtToday(userId, today);
+        return GoodsTodayCountResponseDTO.builder()
+                .todayCount(count)
+                .build();
+    }
+
+    /**
      * 굿즈 선택
      * @param user
      * @param dto
@@ -73,6 +86,16 @@ public class GoodsService {
      */
     @Transactional
     public SelectGoodsResponseDTO selectGoods(UserEntity user, SelectGoodsRequestDTO dto) {
+        // FREE 플랜 사용자의 경우 일일 5개 제한 체크
+        if ("FREE".equals(user.getSubscriptionPlan())) {
+
+            LocalDateTime today = LocalDateTime.now();
+            int count = goodsRepository.countByUserAndCreatedAtToday(user.getUserId(), today);
+
+            if (count >= 5) {
+                throw new IllegalStateException("FREE 플랜은 하루에 5개까지만 생성할 수 있습니다. PRO 플랜으로 업그레이드하시면 무제한으로 생성할 수 있습니다.");
+            }
+        }
 
         byte[] goodsImgFileByte;
 
