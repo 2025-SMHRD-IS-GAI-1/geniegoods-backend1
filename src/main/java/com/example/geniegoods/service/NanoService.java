@@ -94,10 +94,6 @@ public class NanoService {
                         NanobananaComposeResponseDTO.class
                 );
 
-                if (composeResponse.getSaved() == null || !composeResponse.getSaved()) {
-                    throw new RuntimeException("이미지 합성에 실패했습니다. 프롬프트를 확인해주세요.");
-                }
-
                 // 7. base64 디코딩하여 MultipartFile로 변환
                 String resultData = composeResponse.getResult_data();
                 if (resultData == null || resultData.isEmpty()) {

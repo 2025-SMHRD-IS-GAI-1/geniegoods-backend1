@@ -73,24 +73,18 @@ public class UserService {
             ProfileImgResponseDTO response = new ProfileImgResponseDTO();
             // 파일 유효성 검사
             if (file.isEmpty()) {
-                response.setStatus("ERROR");
-                response.setMessage("파일이 비어있습니다.");
-                return response;
+                throw new IllegalStateException("파일이 비어있습니다.");
             }
 
             // 이미지 파일인지 확인
             String contentType = file.getContentType();
             if (contentType == null || !contentType.startsWith("image/")) {
-                response.setStatus("ERROR");
-                response.setMessage("이미지 파일만 업로드 가능합니다.");
-                return response;
+                throw new IllegalStateException("이미지 파일만 업로드 가능합니다.");
             }
 
             // 파일 크기 제한 (10MB)
             if (file.getSize() > 10 * 1024 * 1024) {
-                response.setStatus("ERROR");
-                response.setMessage("파일 크기는 10MB를 초과할 수 없습니다.");
-                return response;
+                throw new IllegalStateException("파일 크기는 10MB를 초과할 수 없습니다.");
             }
 
             // 기존 프로필 이미지가 있으면 삭제
@@ -108,15 +102,11 @@ public class UserService {
             userRepository.save(user);
 
             return ProfileImgResponseDTO.builder()
-                    .status("SUCCESS")
                     .message("프로필 이미지가 업로드되었습니다.")
                     .profileUrl(user.getProfileUrl())
                     .build();
         } catch (IOException e) {
-            return ProfileImgResponseDTO.builder()
-                    .status("ERROR")
-                    .message("파일 업로드 중 오류가 발생했습니다: \" + e.getMessage()")
-                    .build();
+            throw new IllegalStateException("파일 업로드 중 오류가 발생했습니다." + e.getMessage());
         }
 
     }
@@ -160,9 +150,7 @@ public class UserService {
         // 프론트쪽에서 무슨 요청을 보낼지 모르니 모든 경우의 수를 막아야 함
         // 현재 사용자의 닉네임과 같으면 변경 안해도됨
         if (currentUser != null && currentUser.getNickname().equals(newNickname)) {
-            response.setStatus("SAME_AS_CURRENT");
-            response.setMessage("현재 사용 중인 닉네임입니다.");
-            return response;
+            throw new IllegalStateException("현재 사용 중인 닉네임입니다.");
         }
 
         // 닉네임 중복 확인
@@ -170,9 +158,7 @@ public class UserService {
 
         // 중복확인 했는데 있으면 변경 안해도됨
         if(count > 0) {
-            response.setStatus("DUPLICATED");
             response.setMessage("이미 사용 중인 닉네임입니다.");
-            return response;
         } else { // 실제로 닉네임 변경
             currentUser.setNickname(newNickname);
         }
@@ -180,7 +166,6 @@ public class UserService {
         userRepository.save(currentUser);
 
         return NickUpdateResponseDTO.builder()
-                .message("SUCCESS")
                 .message("닉네임을 " + newNickname + "으로 변경했습니다.")
                 .build();
     }
@@ -208,7 +193,6 @@ public class UserService {
         goodsRepository.updateIsPublicByUserId(userId, false);
 
         return WithDrawResponseDTO.builder()
-                .status("SUCCESS")
                 .message("회원탈퇴가 완료되었습니다. 이용해 주셔서 감사합니다.")
                 .build();
     }

@@ -66,6 +66,19 @@ public class GoodsService {
     }
 
     /**
+     * 오늘 생성한 굿즈 개수 조회
+     * @param userId 사용자 ID
+     * @return 오늘 생성한 굿즈 개수
+     */
+    public GoodsTodayCountResponseDTO getTodayGoodsCount(Long userId) {
+        LocalDateTime today = LocalDateTime.now();
+        int count = goodsRepository.countByUserAndCreatedAtToday(userId, today);
+        return GoodsTodayCountResponseDTO.builder()
+                .todayCount(count)
+                .build();
+    }
+
+    /**
      * 굿즈 선택
      * @param user
      * @param dto
@@ -73,6 +86,16 @@ public class GoodsService {
      */
     @Transactional
     public SelectGoodsResponseDTO selectGoods(UserEntity user, SelectGoodsRequestDTO dto) {
+        // FREE 플랜 사용자의 경우 일일 5개 제한 체크
+        if ("FREE".equals(user.getSubscriptionPlan())) {
+
+            LocalDateTime today = LocalDateTime.now();
+            int count = goodsRepository.countByUserAndCreatedAtToday(user.getUserId(), today);
+
+            if (count >= 5) {
+                throw new IllegalStateException("FREE 플랜은 하루에 5개까지만 생성할 수 있습니다. PRO 플랜으로 업그레이드하시면 무제한으로 생성할 수 있습니다.");
+            }
+        }
 
         byte[] goodsImgFileByte;
 
@@ -140,7 +163,6 @@ public class GoodsService {
 
         goodsRepository.save(goods);
 
-        response.setStatus("SUCCESS");
         response.setMessage("굿즈 선택 완료");
         return response;
     }
@@ -151,14 +173,10 @@ public class GoodsService {
      * @return
      */
     public DeleteGoodsSampleResponseDTO deleteSampleImg(DeleteGoodsSampleRequestDTO request) {
-        DeleteGoodsSampleResponseDTO response = new DeleteGoodsSampleResponseDTO();
 
         // url이 안넘어 올때
         if(request.getGoodsSampleImgUrl().isEmpty()) {
-            log.warn("이미지 URL이 비어있습니다.");
-            response.setStatus("ERROR");
-            response.setMessage("이미지 URL이 비어있습니다.");
-            return response;
+            throw new IllegalArgumentException("존재하지 않는 카테고리입니다");
         }
 
         // 이미지 삭제
@@ -166,9 +184,9 @@ public class GoodsService {
             objectStorageService.deleteImage(url);
         }
 
-        response.setStatus("SUCCESS");
-        response.setMessage("이미지 삭제 완료");
-        return response;
+        return DeleteGoodsSampleResponseDTO.builder()
+                .message("이미지 삭제 완료")
+                .build();
     }
 
     /**
@@ -318,7 +336,6 @@ public class GoodsService {
         }
 
         return CreateGoodsImgResponseDTO.builder()
-                .status("SUCCESS")
                 .message("굿즈 이미지 생성 완료")
                 .goodsImgUrl(goodsImgUrl)
                 .goodsImgSize(goodsImgFile.getSize())
@@ -375,7 +392,6 @@ public class GoodsService {
         }
 
         return CreateGoodsSampleResponseDTO.builder()
-                .status("SUCCESS")
                 .message("시안 생성 완료")
                 .goodsSampleImgUrls(sampleImgUrls)
                 .build();

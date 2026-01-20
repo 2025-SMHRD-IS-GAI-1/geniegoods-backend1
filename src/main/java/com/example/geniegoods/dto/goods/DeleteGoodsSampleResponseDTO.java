@@ -1,5 +1,6 @@
 package com.example.geniegoods.dto.goods;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 
 @Getter
@@ -9,6 +10,6 @@ import lombok.*;
 @Builder
 @ToString
 public class DeleteGoodsSampleResponseDTO {
-    private String status;
+    @Schema(description = "메세지", example = "https://kr.object.ncloudstorage.com")
     private String message;
 }

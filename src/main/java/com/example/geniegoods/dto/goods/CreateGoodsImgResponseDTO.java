@@ -11,8 +11,6 @@ import lombok.*;
 @ToString
 @Schema(description = "굿즈 이미지 생성 응답")
 public class CreateGoodsImgResponseDTO {
-    @Schema(description = "상태 값", example = "SUCCESS")
-    private String status;
     @Schema(description = "메세지", example = "업로드 이미지 Object Storage 저장 실패")
     private String message;
     @Schema(description = "굿즈 이미지 url", example = "https://kr.object.ncloudstorage.com")
