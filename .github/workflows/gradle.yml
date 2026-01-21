@@ -1,0 +1,63 @@
+name: Java CI/CD with Gradle
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+      - name: Build with Gradle
+        run: ./gradlew build -x test
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: geniegoods-backend1
+          path: build/libs/*[!plain].jar
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: geniegoods-backend1
+
+      # 1. 파일을 공인 서버를 거쳐 사설 서버로 전송
+      - name: Copy JAR to Private Server via Proxy
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.NCP_PRIVATE_HOST }}
+          username: ${{ secrets.NCP_SSH_USERNAME }}
+          key: ${{ secrets.NCP_SSH_PRIVATE_KEY }}
+          proxy_host: ${{ secrets.NCP_SSH_HOST }}
+          proxy_username: ${{ secrets.NCP_SSH_USERNAME }}
+          proxy_key: ${{ secrets.NCP_SSH_PRIVATE_KEY }}
+          source: "*.jar"
+          target: "/root/apps"                       # 사설 서버의 저장 경로
+
+      # 2. 사설 서버에 접속하여 배포 스크립트 실행
+      - name: Deploy to Private Server via Proxy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.NCP_PRIVATE_HOST }}
+          username: ${{ secrets.NCP_SSH_USERNAME }}
+          key: ${{ secrets.NCP_SSH_PRIVATE_KEY }}
+          proxy_host: ${{ secrets.NCP_SSH_HOST }}    # 공인 IP 서버
+          proxy_username: ${{ secrets.NCP_SSH_USERNAME }}
+          proxy_key: ${{ secrets.NCP_SSH_PRIVATE_KEY }}
+          script: |
+            # 사설 서버 내 미리 만들어둔 스크립트 실행 (절대경로 권장)
+            chmod +x /root/deploy.sh
+            /root/deploy.sh
