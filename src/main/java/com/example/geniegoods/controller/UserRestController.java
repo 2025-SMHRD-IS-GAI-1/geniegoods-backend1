@@ -37,7 +37,7 @@ public class UserRestController {
     @Operation(summary = "현재 사용자 정보 조회", description = "Cookie에 저장된 AccessToken을 통해 현재 로그인한 사용자의 정보를 가져옵니다.")
     @GetMapping("/me")
     public ResponseEntity<CurrentUserResponseDTO> getCurrentUser(@AuthenticationPrincipal UserEntity user) {
-        log.info("현재 사용자 정보 조회 user : " + user);
+        log.info("현재 사용자 닉네임 조회 : " + user.getNickname());
         CurrentUserResponseDTO response = userService.getCurrentUserInfo(user);
         return ResponseEntity.ok(response);
     }
