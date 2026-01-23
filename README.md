@@ -109,7 +109,7 @@
   <tr>
     <td><b>스토리지</b></td>
     <td>
-      <img src="https://img.shields.io/badge/Amazon_S3-438534?style=flat&logo=amazon-s3" />
+      Object Storage
     </td>
   </tr>
 
